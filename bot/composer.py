@@ -1840,6 +1840,7 @@ def build_guess_word_project(
     static_dst.mkdir(parents=True, exist_ok=True)
     has_logo = False
     has_chime = False
+    has_tick = False
     ASSET_EXTS = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".mp3", ".wav"}
     for layer in [TEMPLATE_DIR / "static", (channel_dir / "static") if channel_dir else None]:
         if layer is None or not layer.exists():
@@ -1847,10 +1848,13 @@ def build_guess_word_project(
         for f in layer.iterdir():
             if f.is_file() and f.suffix.lower() in ASSET_EXTS:
                 shutil.copy2(f, static_dst / f.name)
-                if f.name.lower() == "logo.png":
+                lower = f.name.lower()
+                if lower == "logo.png":
                     has_logo = True
-                if f.name.lower() == "chime.mp3":
+                if lower == "chime.mp3":
                     has_chime = True
+                if lower == "tick.mp3":
+                    has_tick = True
 
     # ────── TIMING (no intro voice/card — straight into word 1) ──────
     # CEO 2026-06-16: countdown 3 seconds, integer ticks. Each word:
@@ -1932,6 +1936,7 @@ def build_guess_word_project(
         words_count=len(timings),
         lesson_number=lesson_number,
         has_chime=has_chime,
+        has_tick=has_tick,
         channel_name=os.environ.get("CHANNEL_NAME", DEFAULT_CHANNEL_NAME),
         channel_tagline=os.environ.get("CHANNEL_TAGLINE", DEFAULT_CHANNEL_TAGLINE),
         avatar_emoji=os.environ.get("AVATAR_EMOJI", DEFAULT_AVATAR_EMOJI),

@@ -155,13 +155,12 @@
       }
       .r-example {
         position: absolute;
-        top: 330px; left: 24px; right: 24px;
+        top: 320px; left: 24px; right: 24px;
         text-align: center;
         font-family: "Be Vietnam Pro", sans-serif;
-        font-size: 24px; font-weight: 500;
-        color: #6b6786;
-        font-style: italic;
-        line-height: 1.2;
+        font-size: 40px; font-weight: 600;
+        color: #2b2547;
+        line-height: 1.18;
       }
 
       #countdown-bar-wrap {
@@ -351,11 +350,14 @@
       </div>
     </div>
 
-    {# Chime ticks at countdown 3, 2, 1 #}
-    {% if has_chime %}
-    <audio data-start="{{ w.start }}"        data-duration="0.6" data-track-index="50" src="static/chime.mp3"></audio>
-    <audio data-start="{{ w.start + 1.0 }}"  data-duration="0.6" data-track-index="51" src="static/chime.mp3"></audio>
-    <audio data-start="{{ w.start + 2.0 }}"  data-duration="0.6" data-track-index="52" src="static/chime.mp3"></audio>
+    {# Countdown 3-2-1: clock-tick "tịch tịch tịch" for urgency.
+       Falls back to chime.mp3 if tick.mp3 isn't shipped/copied yet. #}
+    {% set _tick_src = "static/tick.mp3" if has_tick else "static/chime.mp3" %}
+    {% set _tick_dur = "0.15" if has_tick else "0.6" %}
+    {% if has_tick or has_chime %}
+    <audio data-start="{{ w.start }}"        data-duration="{{ _tick_dur }}" data-track-index="50" src="{{ _tick_src }}"></audio>
+    <audio data-start="{{ w.start + 1.0 }}"  data-duration="{{ _tick_dur }}" data-track-index="51" src="{{ _tick_src }}"></audio>
+    <audio data-start="{{ w.start + 2.0 }}"  data-duration="{{ _tick_dur }}" data-track-index="52" src="{{ _tick_src }}"></audio>
     {% endif %}
 
     {# Reveal voice #}
@@ -421,7 +423,7 @@
         { selector: ".r-target", scale_steps: [
             { above: 12, scale: 0.85 }, { above: 18, scale: 0.72 }, { above: 26, scale: 0.58 } ]},
         { selector: ".r-example", scale_steps: [
-            { above: 40, scale: 0.90 }, { above: 60, scale: 0.78 }, { above: 80, scale: 0.65 } ]},
+            { above: 28, scale: 0.90 }, { above: 44, scale: 0.78 }, { above: 64, scale: 0.65 }, { above: 90, scale: 0.55 } ]},
         { selector: "#outro-cta", scale_steps: [
             { above: 50, scale: 0.88 }, { above: 80, scale: 0.74 }, { above: 110, scale: 0.62 } ]},
         { selector: "#outro-badge", scale_steps: [
