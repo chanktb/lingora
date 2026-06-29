@@ -614,21 +614,26 @@ def _static_narration_script(
             intro = f"もっと自然な{target_lang_name} — 8つの言い換え。"
             outro = "保存していいね&フォローお願いします!"
     else:  # vi default
+        # NOTE: target_lang_name là TÊN ngôn ngữ trần ("Đức", "Trung", "Nhật",
+        # "Hàn", "Pháp"...) — trong tiếng Việt phải kèm tiền tố "tiếng" để câu
+        # nghe tự nhiên. Voice TTS đọc "tiếng Đức" → "tiếng-đức" (đúng), còn
+        # nếu để nguyên target_lang_name là "Đức" thì câu thành "học Đức mỗi
+        # ngày" — sai ngữ pháp (CEO 2026-06-29).
         if layout_type == "vocab_table":
             intro = (
-                f"Học ngay {target_lang_name} với chủ đề {short.lower() or 'hôm nay'}. "
+                f"Học ngay tiếng {target_lang_name} với chủ đề {short.lower() or 'hôm nay'}. "
                 f"Lưu lại để xem mỗi ngày!"
             )
-            outro = f"Hãy like và follow để học {target_lang_name} mỗi ngày nhé!"
+            outro = f"Hãy like và follow để học tiếng {target_lang_name} mỗi ngày nhé!"
         elif layout_type == "fill_blank":
             intro = "Điền vào chỗ trống — bạn chọn đáp án nào? Đọc kỹ câu và chọn A, B hoặc C nhé."
             outro = "Đáp án của bạn là gì? Comment ngay bên dưới!"
         else:  # compare
             intro = (
-                f"Nói {target_lang_name} sang chảnh hơn — "
+                f"Nói tiếng {target_lang_name} sang chảnh hơn — "
                 f"8 cách diễn đạt khiến bạn nghe như người bản xứ."
             )
-            outro = f"Lưu lại và follow để học {target_lang_name} mỗi ngày!"
+            outro = f"Lưu lại và follow để học tiếng {target_lang_name} mỗi ngày!"
     return intro, outro
 
 
