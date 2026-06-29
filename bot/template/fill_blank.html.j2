@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1080, height=1920" />
+    {% if is_video_mode %}
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    {% endif %}
     <link
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
       rel="stylesheet"
@@ -91,7 +94,7 @@
       }
 
       /* 3 OPTIONS — white pills with A/B/C label. Highlight class toggled
-         by JS in sync with the audio narration reading each option.
+         by GSAP timeline in sync with the audio narration reading each option.
          NO answer revealed. */
       #options-wrap {
         top: 955px; left: 0; right: 0; text-align: center;
@@ -136,7 +139,7 @@
                     box-shadow 0.25s ease;
       }
       /* Highlight ring + bounce + glowing border when this option is being
-         read aloud. Composer wires .option-box[data-opt='A'].is-active. */
+         read aloud. GSAP timeline adds .is-active at highlight_start. */
       .option-box.is-active { transform: translateY(-14px) scale(1.06); }
       .option-box.is-active .option-chip {
         border-color: var(--accent-gold);
@@ -173,6 +176,8 @@
         color: rgba(255,255,255,0.95); letter-spacing: 0.5px;
         text-shadow: 0 3px 12px rgba(0,0,0,0.8);
       }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
     </style>
   </head>
   <body>
@@ -213,7 +218,7 @@
 
       <div id="options-wrap" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="4">
         {% for opt in options %}
-        <span class="option-box" data-opt="{{ ['A','B','C','D'][loop.index0] }}">
+        <span class="option-box" data-opt="{{ ['A','B','C','D'][loop.index0] }}" id="opt-{{ ['A','B','C','D'][loop.index0] }}">
           <span class="option-label">{{ ['A','B','C','D'][loop.index0] }}</span>
           <span class="option-chip">{{ opt }}</span>
         </span>
@@ -229,6 +234,24 @@
       </div>
 
       <div id="tagline" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="6">{{ channel_tagline }}</div>
+      {% endif %}
+
+      {% if is_video_mode %}
+      <!-- ===== AUDIO ===== -->
+      {% if use_master_audio %}
+      {#  Pre-mixed single track (zero per-clip mixer drift) — same as other layouts. #}
+      <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/master.wav"></audio>
+      {% else %}
+      {#  Fallback when chime asset is missing — schedule per clip. #}
+      <audio id="audio-intro-vi" class="clip" data-start="{{ intro.voice_start }}" data-duration="{{ intro.voice_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/intro_vi.wav"></audio>
+      {% for ot in options_timing %}
+      {% if has_chime %}
+      <audio id="chime-{{ ot.label }}" class="clip" data-start="{{ ot.chime_start }}" data-duration="0.5" data-track-index="8" data-volume="0.85" src="static/chime.mp3"></audio>
+      {% endif %}
+      <audio id="audio-opt-{{ ot.label }}" class="clip" data-start="{{ ot.voice_start }}" data-duration="{{ ot.voice_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/opt_{{ ot.label }}.wav"></audio>
+      {% endfor %}
+      <audio id="audio-outro-vi" class="clip" data-start="{{ outro.voice_start }}" data-duration="{{ outro.voice_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/outro_vi.wav"></audio>
+      {% endif %}
       {% endif %}
     </div>
 
@@ -269,6 +292,39 @@
             { above: 14, scale: 0.55 },
           ]},
       ]);
+
+      {% if is_video_mode %}
+      // ─── Highlight ring synced with target-language voice per option ───
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const TOTAL = {{ total_duration }};
+
+      // Subtle brand pulse throughout
+      tl.to(".brand-logo", { scale: 1.06, duration: 1.5, repeat: Math.ceil(TOTAL / 3), yoyo: true, ease: "sine.inOut" }, 0);
+
+      // INTRO: title pill + sentence pill fade-in during intro voice
+      tl.from("#title-pill",   { y: -30, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.10);
+      tl.from("#sentence-text",{ y:  30, opacity: 0, scale: 0.94, duration: 0.65, ease: "back.out(1.6)" }, 0.30);
+      tl.from(".option-box",   { y:  40, opacity: 0, duration: 0.55, stagger: 0.10, ease: "power3.out" }, 0.50);
+
+      // Per-option highlight: add .is-active at highlight_start, pulse during voice,
+      // remove at highlight_end. Each option is independent — no cross-window
+      // overlap because composer guarantees end_i < start_{i+1}.
+      {% for ot in options_timing %}
+      {
+        const sel = "#opt-{{ ot.label }}";
+        tl.call(() => document.querySelector(sel)?.classList.add("is-active"), null, {{ ot.highlight_start }});
+        tl.to(sel,   { scale: 1.08, duration: 0.30, ease: "power2.out"  }, {{ ot.voice_start }});
+        tl.to(sel,   { scale: 1.00, duration: 0.35, ease: "power2.inOut"}, {{ ot.voice_start }} + 0.4);
+        tl.call(() => document.querySelector(sel)?.classList.remove("is-active"), null, {{ ot.highlight_end }});
+      }
+      {% endfor %}
+
+      // OUTRO: gentle sentence pulse to call for the answer
+      tl.to("#sentence-text", { scale: 1.04, duration: 0.45, yoyo: true, repeat: 1, ease: "sine.inOut" }, {{ outro.voice_start }});
+
+      window.__timelines["main"] = tl;
+      {% endif %}
     </script>
   </body>
 </html>

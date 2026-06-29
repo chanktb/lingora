@@ -1205,8 +1205,15 @@ async def run_once(force: bool = False) -> int:
             segments.append(tts.AudioSegment(f"v_{i}", item.voice_repeat, voice, rate=target_rate))
         segments.append(tts.AudioSegment("outro_vi", content.outro_native, native_voice, rate=vn_voice_rate))
     elif layout_type == "fill_blank":
-        # Static PNG poster v2 — NO audio (was video v1).
-        segments = []
+        # Video v3 (2026-06-29): intro_vi + 3 target-voice options + outro_vi.
+        # Intro/outro narration text is lang-keyed in composer.fill_blank_voice_texts
+        # so the same script is used by lingora bot AND Shortcraft webapp.
+        intro_text, outro_text = composer.fill_blank_voice_texts(intent.native_lang)
+        target_rate = _norm_rate(os.environ.get("QUIZ_REVERSE_TARGET_RATE", "-10%"))
+        segments = [tts.AudioSegment("intro_vi", intro_text, native_voice, rate=vn_voice_rate)]
+        for label, opt_text in zip(["A", "B", "C"], content.options[:3]):
+            segments.append(tts.AudioSegment(f"opt_{label}", opt_text, voice, rate=target_rate))
+        segments.append(tts.AudioSegment("outro_vi", outro_text, native_voice, rate=vn_voice_rate))
     elif layout_type == "vocab_table":
         # Static PNG poster — NO audio.
         segments = []
@@ -1458,6 +1465,8 @@ async def run_once(force: bool = False) -> int:
             out_dir=job_dir, target_lang_name=intent.target_lang_name,
             hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
             native_lang=intent.native_lang,
+            audio_clips=clips,
+            audio_src_dir=audio_dir,
         )
     elif layout_type == "vocab_table":
         # v4: Gen full photorealistic scene (like fill_blank) instead of small icon.
@@ -1537,8 +1546,9 @@ async def run_once(force: bool = False) -> int:
     # HyperFrames sometimes returns exit 0 but renders video-only MP4 (Chromium
     # audio context bug under high concurrency). If we expected audio but the
     # MP4 is silent → re-render once. Skip the check for photo-post layouts
-    # (vocab_table, fill_blank) which legitimately have no audio.
-    is_photo_layout = layout_type in ("vocab_table", "fill_blank", "compare")
+    # (vocab_table, compare) which legitimately have no audio. fill_blank
+    # moved to real-video mode 2026-06-29 — it's NO LONGER a photo layout.
+    is_photo_layout = layout_type in ("vocab_table", "compare")
     expected_audio = bool(segments) and not is_photo_layout
     if expected_audio:
         has_audio = await asyncio.to_thread(mp4_has_audio_stream, output_mp4)
@@ -1871,7 +1881,7 @@ async def run_once(force: bool = False) -> int:
     # is disabled OR the Ken-Burns conversion above failed (is_static_kb_video
     # flipped back to False). Otherwise output_mp4 is now a Reel-ready video
     # and the regular Reels+Story upload path below handles it.
-    if layout_type in ("vocab_table", "fill_blank", "compare") and not is_static_kb_video:
+    if layout_type in ("vocab_table", "compare") and not is_static_kb_video:
         png_path = await asyncio.to_thread(extract_full_frame_png, output_mp4, at_seconds=0.8)
         if png_path is None:
             log.error("Failed to extract PNG frame for %s", layout_type)

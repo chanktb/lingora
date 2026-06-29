@@ -1410,8 +1410,58 @@ def build_dialogue_project(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  FILL_BLANK_QUIZ layout — short photo+sentence fill-in-blank
+#  FILL_BLANK_QUIZ layout — short photo+sentence fill-in-blank video
 # ═══════════════════════════════════════════════════════════════════════
+#
+# Was a static 1.5s PNG poster in v1-v2 (no audio). v3 (2026-06-29) turns
+# it into a real Reels video with intro+outro narration and per-option
+# voice + highlight ring — same pattern as quiz/whats_this.
+# The static-image fallback still works when ``audio_clips`` is None /
+# empty: useful for jobs that only want the FB /photos poster.
+
+FILL_BLANK_INTRO_BY_LANG = {
+    "vi": "Đố vui ngắn — điền vào chỗ trống. Đọc kỹ câu rồi chọn từ phù hợp nhé.",
+    "en": "Quick quiz — fill in the blank. Read the sentence, then pick the answer that fits.",
+    "ko": "퀴즈 시간! 빈칸에 들어갈 단어를 골라보세요.",
+    "ja": "今日のクイズ!空欄に入る単語を選んでね。",
+}
+
+FILL_BLANK_OUTRO_BY_LANG = {
+    "vi": "Đáp án của bạn là gì? Comment ngay bên dưới nhé!",
+    "en": "Which one is right? Drop your answer below!",
+    "ko": "정답이 뭐예요? 댓글로 알려주세요!",
+    "ja": "答えはどれ?コメントで教えて!",
+}
+
+
+def fill_blank_voice_texts(native_lang: str) -> tuple[str, str]:
+    """Return (intro_text, outro_text) for fill_blank narration in ``native_lang``.
+
+    Shared by lingora bot (auto_post.py) and Shortcraft webapp
+    (api/workers/render_chain.py) so both produce the SAME narration.
+    Falls back to Vietnamese when native_lang isn't in the map.
+    """
+    lang = (native_lang or "vi").lower()
+    return (
+        FILL_BLANK_INTRO_BY_LANG.get(lang, FILL_BLANK_INTRO_BY_LANG["vi"]),
+        FILL_BLANK_OUTRO_BY_LANG.get(lang, FILL_BLANK_OUTRO_BY_LANG["vi"]),
+    )
+
+
+@dataclass
+class FillBlankOptionTiming:
+    """One option in the fill_blank video timeline."""
+    idx: int                       # 1..3
+    label: str                     # "A" | "B" | "C"
+    text: str                      # the option word/phrase
+    start: float                   # absolute scene start
+    slot: float
+    chime_start: float             # absolute
+    voice_start: float             # absolute (target-lang voice)
+    voice_duration: float
+    highlight_start: float         # when .is-active is added (= chime_start)
+    highlight_end: float           # when .is-active is removed (= voice_end + pad)
+
 
 def build_fill_blank_project(
     *,
@@ -1422,18 +1472,34 @@ def build_fill_blank_project(
     hyperframes_version: str = "0.6.52",
     channel_dir: Path | None = None,
     native_lang: str = "vi",
+    audio_clips: list[AudioClip] | None = None,
+    audio_src_dir: Path | None = None,
 ) -> Path:
-    """Materialize a HyperFrames project for fill_blank as STATIC IMAGE poster.
+    """Materialize a HyperFrames project for fill_blank.
 
-    NO audio clips. Renders as 1.5s "video" → ffmpeg extracts first frame as PNG.
+    Two modes, chosen by whether ``audio_clips`` is provided:
+
+    * **Static poster (audio_clips=None)** — back-compat with v1-v2 callers
+      that only want a 1.5s "video" to frame-extract into a PNG (FB /photos).
+    * **Video (audio_clips=[intro_vi, opt_A, opt_B, opt_C, outro_vi])** —
+      real Reels video with narration + per-option highlight ring synced to
+      the target-language voice reading each option. This is what
+      ``STATIC_LAYOUTS_AS_VIDEO=true`` and the Shortcraft webapp use.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     assets_audio = out_dir / "assets" / "audio"
     assets_audio.mkdir(parents=True, exist_ok=True)
 
+    is_video_mode = bool(audio_clips) and audio_src_dir is not None
+    if is_video_mode:
+        # Expected names: intro_vi, opt_A, opt_B, opt_C, outro_vi
+        for clip in audio_clips:
+            shutil.copy2(audio_src_dir / clip.file, assets_audio / clip.file)
+
     static_dst = out_dir / "static"
     static_dst.mkdir(parents=True, exist_ok=True)
     has_logo = False
+    has_chime = False
     ASSET_EXTS = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".mp3", ".wav"}
     for layer in [TEMPLATE_DIR / "static", (channel_dir / "static") if channel_dir else None]:
         if layer is None or not layer.exists():
@@ -1443,6 +1509,8 @@ def build_fill_blank_project(
                 shutil.copy2(f, static_dst / f.name)
                 if f.name.lower() == "logo.png":
                     has_logo = True
+                if f.name.lower() == "chime.mp3":
+                    has_chime = True
 
     # Scene image (required)
     scene_src = image_src_dir / "scene.png"
@@ -1450,8 +1518,94 @@ def build_fill_blank_project(
         raise FileNotFoundError(f"Missing scene image: {scene_src}")
     shutil.copy2(scene_src, static_dst / "scene.png")
 
-    # 1.5s static — only need 1 still frame
-    total_duration = 1.5
+    options_timing: list[FillBlankOptionTiming] = []
+    intro: dict = {}
+    outro: dict = {}
+    use_master_audio = False
+
+    if is_video_mode:
+        clip_by_name = {c.name: c for c in audio_clips}
+        intro_clip = clip_by_name["intro_vi"]
+        outro_clip = clip_by_name["outro_vi"]
+
+        # ───── INTRO ─────
+        intro_chime_start = 0.05
+        intro_voice_start = intro_chime_start + CHIME_DURATION + 0.05
+        intro_voice_dur = intro_clip.duration
+        intro_slot = round(intro_voice_start + intro_voice_dur + 0.5, 2)
+        intro = {
+            "slot": intro_slot,
+            "chime_start": round(intro_chime_start, 2),
+            "voice_start": round(intro_voice_start, 2),
+            "voice_duration": round(intro_voice_dur + 0.1, 2),
+        }
+
+        # ───── OPTIONS ─────
+        # Each option: chime → voice (target lang) → pad. Highlight ring covers
+        # chime_start..voice_end + pad so the visual cue brackets the voice.
+        GAP_AFTER_VOICE = 0.45
+        labels = ["A", "B", "C"]
+        cursor = intro_slot
+        for i, opt_text in enumerate(content.options[:3]):
+            label = labels[i]
+            voice_clip = clip_by_name[f"opt_{label}"]
+            chime_start = round(cursor + 0.1, 2)
+            voice_start = round(chime_start + CHIME_DURATION + 0.05, 2)
+            voice_dur = voice_clip.duration
+            opt_end = voice_start + voice_dur + GAP_AFTER_VOICE
+            slot = round(opt_end - cursor, 2)
+            options_timing.append(FillBlankOptionTiming(
+                idx=i + 1,
+                label=label,
+                text=opt_text,
+                start=round(cursor, 2),
+                slot=slot,
+                chime_start=chime_start,
+                voice_start=round(voice_start, 2),
+                voice_duration=round(voice_dur + 0.1, 2),
+                highlight_start=round(chime_start - 0.05, 2),
+                highlight_end=round(voice_start + voice_dur + 0.25, 2),
+            ))
+            cursor += slot
+
+        # ───── OUTRO ─────
+        outro_voice_start = round(cursor + 0.3, 2)
+        outro_voice_dur = outro_clip.duration
+        outro_slot = round(outro_voice_dur + 1.2, 2)
+        outro = {
+            "start": round(cursor, 2),
+            "slot": outro_slot,
+            "voice_start": outro_voice_start,
+            "voice_duration": round(outro_voice_dur + 0.1, 2),
+        }
+        cursor += outro_slot
+        total_duration = round(cursor, 2)
+
+        # Premix master.wav (same v5-drift-fix pattern as other layouts)
+        if has_chime:
+            chime_path = static_dst / "chime.mp3"
+            premix_clips: list[tuple[Path, float, float]] = [
+                (chime_path, intro["chime_start"], 0.95),
+                (assets_audio / intro_clip.file, intro["voice_start"], 1.0),
+            ]
+            for ot in options_timing:
+                premix_clips.append((chime_path, ot.chime_start, 0.85))
+                premix_clips.append((
+                    assets_audio / f"opt_{ot.label}.wav", ot.voice_start, 1.0,
+                ))
+            premix_clips.append((
+                assets_audio / outro_clip.file, outro["voice_start"], 1.0,
+            ))
+            master_path = assets_audio / "master.wav"
+            if _premix_audio_track(
+                out_path=master_path,
+                total_duration=total_duration,
+                clips=premix_clips,
+            ):
+                use_master_audio = True
+    else:
+        # Static poster mode — 1.5s, just enough to extract a single frame
+        total_duration = 1.5
 
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
@@ -1460,6 +1614,7 @@ def build_fill_blank_project(
     template = env.get_template("fill_blank.html.j2")
     html = template.render(
         demo_mode=_demo_mode(),
+        is_video_mode=is_video_mode,
         total_duration=total_duration,
         title_native=content.title_native,
         title_target=content.title_target,
@@ -1467,6 +1622,10 @@ def build_fill_blank_project(
         correct_word=content.correct_word,
         options=content.options,
         correct_index=content.correct_index,
+        options_timing=[ot.__dict__ for ot in options_timing],
+        intro=intro,
+        outro=outro,
+        use_master_audio=use_master_audio,
         topic_label=content.topic_label,
         target_lang_name=target_lang_name or "Đức",
         native_lang=native_lang,
@@ -1476,6 +1635,7 @@ def build_fill_blank_project(
         avatar_emoji=os.environ.get("AVATAR_EMOJI", DEFAULT_AVATAR_EMOJI),
         theme=_theme_from_env(),
         has_logo=has_logo,
+        has_chime=has_chime,
     )
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
@@ -1504,6 +1664,7 @@ def build_fill_blank_project(
 
     manifest = {
         "layout_type": "fill_blank",
+        "mode": "video" if is_video_mode else "poster",
         "total_duration": total_duration,
         "sentence_template": content.sentence_template,
         "sentence_filled": content.sentence_template.replace("___", content.correct_word, 1),
@@ -1514,6 +1675,10 @@ def build_fill_blank_project(
         "explanation": content.explanation,  # Telegram admin only
         "caption": content.caption,
     }
+    if is_video_mode:
+        manifest["options_timing"] = [ot.__dict__ for ot in options_timing]
+        manifest["intro"] = intro
+        manifest["outro"] = outro
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
