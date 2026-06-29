@@ -7,14 +7,17 @@ Usage:
 Output:
     channels/<channel>/jobs/<auto-…>/output.mp4
 
-The wizard auto-skips any question whose value is already set in the
-channel's .env file (e.g. if DEFAULT_TARGET_LANG=de is set, it won't
-ask which language).
+Wizard behaviour:
+    - First run with no channel → interactive setup creates one for you
+    - Skips any question whose value is already set in the channel's .env
+    - Topic step offers: type your own, or auto-generate (channel-aware,
+      avoids the last 100 topics already used)
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import shutil
 import sys
@@ -37,17 +40,21 @@ LAYOUTS = [
 ]
 
 LANGS = [
-    ("de", "German",     "Đức"),
-    ("ru", "Russian",    "Nga"),
-    ("zh", "Chinese",    "Trung"),
-    ("ja", "Japanese",   "Nhật"),
-    ("ko", "Korean",     "Hàn"),
-    ("en", "English",    "Anh"),
-    ("fr", "French",     "Pháp"),
-    ("es", "Spanish",    "Tây Ban Nha"),
-    ("vi", "Vietnamese", "Việt"),
+    ("de", "German"),
+    ("ru", "Russian"),
+    ("zh", "Chinese"),
+    ("ja", "Japanese"),
+    ("ko", "Korean"),
+    ("en", "English"),
+    ("fr", "French"),
+    ("es", "Spanish"),
+    ("vi", "Vietnamese"),
 ]
-LANG_VI = {code: vi for code, _, vi in LANGS}
+LANG_NAME = {code: name for code, name in LANGS}
+LANG_VI = {
+    "de": "Đức", "ru": "Nga", "zh": "Trung", "ja": "Nhật", "ko": "Hàn",
+    "en": "Anh", "fr": "Pháp", "es": "Tây Ban Nha", "vi": "Việt",
+}
 
 VOICES = [
     ("any",    "Any (let the engine pick)"),
@@ -56,23 +63,8 @@ VOICES = [
 ]
 
 
-# ── Helpers ──────────────────────────────────────────────────────────
-def _read_env(env_path: Path) -> dict[str, str]:
-    """Minimal .env parser — no quoting, no expansion. Enough to check keys."""
-    out: dict[str, str] = {}
-    if not env_path.exists():
-        return out
-    for raw in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        out[key.strip()] = val.strip().strip('"').strip("'")
-    return out
-
-
+# ── Generic prompts ──────────────────────────────────────────────────
 def _menu(prompt: str, items: list[tuple[str, str]], *, default_idx: int = 0) -> str:
-    """Show numbered menu. items = [(key, label), ...]. Returns chosen key."""
     print(f"\n{prompt}")
     for i, (_, label) in enumerate(items, 1):
         marker = "  ← default" if i - 1 == default_idx else ""
@@ -111,80 +103,273 @@ def _confirm(prompt: str, *, default_yes: bool = True) -> bool:
     return raw.startswith("y")
 
 
-# ── Channel discovery & setup ────────────────────────────────────────
-def _pick_channel(channels_dir: Path) -> Path:
-    """Pick or create a channel folder. Exits if .env needs to be filled in."""
+# ── .env helpers ─────────────────────────────────────────────────────
+def _read_env(env_path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not env_path.exists():
+        return out
+    for raw in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        out[key.strip()] = val.strip().strip('"').strip("'")
+    return out
+
+
+def _apply_env_to_os(env: dict[str, str]) -> None:
+    """Push channel .env values into os.environ so the engine can read them.
+
+    Use setdefault so explicit env (CLI/PowerShell) still wins.
+    """
+    for k, v in env.items():
+        if v and k not in os.environ:
+            os.environ[k] = v
+
+
+def _write_env_from_template(target: Path, overrides: dict[str, str]) -> None:
+    """Copy .env.example to target, replacing KEY= lines with overrides."""
+    template = HERE / ".env.example"
+    if not template.exists():
+        sys.exit("ERROR: .env.example missing at repo root.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lines_out: list[str] = []
+    seen: set[str] = set()
+    for raw in template.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = raw.strip()
+        if (not stripped) or stripped.startswith("#") or "=" not in stripped:
+            lines_out.append(raw); continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in overrides:
+            lines_out.append(f"{key}={overrides[key]}")
+            seen.add(key)
+        else:
+            lines_out.append(raw)
+    # Append any overrides not present in template (rare)
+    extras = [k for k in overrides if k not in seen]
+    if extras:
+        lines_out.append("")
+        lines_out.append("# ── added by wizard ──")
+        for k in extras:
+            lines_out.append(f"{k}={overrides[k]}")
+    target.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
+
+
+# ── Channel: pick existing or create new ─────────────────────────────
+def _create_channel_wizard(channels_dir: Path) -> Path:
+    print("\n=== Lingora — create your first channel ===")
+    print(
+        "A 'channel' is just a config folder — one .env per video config.\n"
+        "You can add more later by re-running this wizard or copying the folder.\n"
+    )
+
+    name = _ask_text("Channel folder name", default="myvideo")
+    display = _ask_text("Display name (used on-screen)", default="My Language Channel")
+    niche = _ask_text(
+        "Niche / scope (what kind of videos? — used by auto-topic)\n"
+        "  e.g. 'everyday German for travelers', 'JLPT N5 vocab', 'K-pop & Korean culture'\n"
+        "> ",
+        default="general language learning",
+    )
+
+    target = _menu(
+        "Language to teach (target):",
+        [(c, f"{n} ({c})") for c, n in LANGS],
+        default_idx=0,
+    )
+    native = _menu(
+        "On-screen translation + native voice (native):",
+        [(c, f"{n} ({c})") for c, n in LANGS],
+        default_idx=8,  # default Vietnamese
+    )
+    voice = _menu("Voice preference:", VOICES, default_idx=0)
+
+    print(
+        "\nGemini API key (required — generates the content)\n"
+        "  Free key: https://aistudio.google.com/apikey"
+    )
+    key = _ask_text("Paste GEMINI_API_KEY here")
+
+    print("\nOptional: Cloudflare Workers AI for scene/character images.")
+    print("  Format: account_id:api_token  (multiple accounts: id1:tok1,id2:tok2)")
+    cf = _ask_text("Paste CLOUDFLARE_ACCOUNTS (Enter to skip)", allow_empty=True)
+
+    overrides = {
+        "CHANNEL_NAME": display,
+        "NICHE": niche,
+        "DEFAULT_TARGET_LANG": target,
+        "DEFAULT_NATIVE_LANG": native,
+        "DEFAULT_VOICE_GENDER": voice,
+        "GEMINI_API_KEY": key,
+        "GEMINI_API_KEYS": key,  # single-key user — auto_post falls back fine
+    }
+    if cf:
+        overrides["CLOUDFLARE_ACCOUNTS"] = cf
+
+    ch_dir = channels_dir / name
+    env_file = ch_dir / ".env"
+    if env_file.exists() and not _confirm(
+        f"\n{env_file} already exists. Overwrite?", default_yes=False,
+    ):
+        sys.exit("Cancelled.")
+    _write_env_from_template(env_file, overrides)
+    print(f"\n  ✓ Created {env_file}")
+    return ch_dir
+
+
+def _pick_or_create_channel(channels_dir: Path) -> Path:
     existing = sorted(
         [p for p in channels_dir.iterdir() if p.is_dir() and (p / ".env").exists()]
     ) if channels_dir.exists() else []
 
-    if len(existing) == 0:
-        # First-time setup: scaffold channels/myvideo/.env from template
-        ch = channels_dir / "myvideo"
-        ch.mkdir(parents=True, exist_ok=True)
-        template = HERE / ".env.example"
-        env_file = ch / ".env"
-        if template.exists():
-            shutil.copy2(template, env_file)
-            print(f"\n  Created {env_file}")
-            print(f"  → Open it, paste your GEMINI_API_KEYS, then re-run.")
-            print(f"  → Free key: https://aistudio.google.com/apikey")
-        else:
-            print(f"\n  ERROR: .env.example missing at repo root.")
-        sys.exit(1)
+    if not existing:
+        return _create_channel_wizard(channels_dir)
 
     if len(existing) == 1:
         return existing[0]
 
-    items = [(p.name, p.name) for p in existing]
+    items = [(p.name, p.name) for p in existing] + [("__new__", "+ Create a new channel")]
     chosen = _menu("Pick a channel:", items, default_idx=0)
+    if chosen == "__new__":
+        return _create_channel_wizard(channels_dir)
     return channels_dir / chosen
 
 
+# ── Auto-topic generation ────────────────────────────────────────────
+def _recent_topics(channel_dir: Path, limit: int = 100) -> list[str]:
+    state_file = channel_dir / "auto_post_state.json"
+    if not state_file.exists():
+        return []
+    try:
+        data = json.loads(state_file.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return []
+    used = data.get("used_topics") or []
+    last_topic = data.get("last_topic")
+    if last_topic and last_topic not in used:
+        used = [*used, last_topic]
+    return used[-limit:]
+
+
+def _auto_topic(channel_dir: Path, env: dict[str, str], target_code: str) -> str:
+    """Ask Gemini for one fresh topic that avoids the recent history."""
+    niche = env.get("NICHE") or env.get("CHANNEL_NAME") or "general language learning"
+    target_name = LANG_NAME.get(target_code, target_code.upper())
+    used = _recent_topics(channel_dir, limit=100)
+    avoid_block = "\n".join(f"- {t}" for t in used) if used else "(none yet)"
+
+    prompt = (
+        f"Pick ONE fresh topic for a short {target_name} language-learning video.\n"
+        f"Channel niche / scope: {niche}\n\n"
+        f"AVOID these topics already used (do not repeat or rephrase):\n{avoid_block}\n\n"
+        f"Output ONE topic line, 3-8 English words, concrete and teachable. "
+        f"No numbering, no quotes, no period. Just the topic line."
+    )
+
+    sys.path.insert(0, str(HERE / "bot"))
+    import generator
+    from google.genai import types
+
+    generator._reset_gemini_keys()  # we set env vars after import-time
+    model = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
+    try:
+        resp = generator._call_gemini(
+            client=None, model=model, contents=prompt,
+            config=types.GenerateContentConfig(temperature=1.1, max_output_tokens=80),
+        )
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! auto-topic failed: {exc}")
+        return ""
+
+    text = (resp.text or "").strip().splitlines()[0]
+    return text.strip().strip('"').strip("'").strip("•- ").rstrip(".")
+
+
+def _topic_phase(channel_dir: Path, env: dict[str, str], target_code: str) -> str:
+    """Either type a topic or have one auto-generated (with regen + override)."""
+    niche = env.get("NICHE") or "(no niche set)"
+    items = [
+        ("manual", "Type your own"),
+        ("auto",   f"Auto-generate from niche: {niche!r}"),
+    ]
+    mode = _menu("Topic:", items, default_idx=0)
+    if mode == "manual":
+        return _ask_text("\nTopic (e.g. 'ordering coffee', 'kitchen items')")
+
+    while True:
+        print("\n[generating…]")
+        suggestion = _auto_topic(channel_dir, env, target_code)
+        if not suggestion:
+            print("  Falling back to manual input.")
+            return _ask_text("Topic")
+        print(f"\nSuggested topic: \"{suggestion}\"")
+        choice = _menu(
+            "What now?",
+            [("use", "Use this topic"),
+             ("regen", "Regenerate another"),
+             ("manual", "Type my own instead")],
+            default_idx=0,
+        )
+        if choice == "use":
+            return suggestion
+        if choice == "manual":
+            return _ask_text("Topic", default=suggestion)
+        # regen → loop
+
+
+# ── Main wizard ──────────────────────────────────────────────────────
 def _wizard() -> argparse.Namespace:
     print("\n=== Lingora — interactive wizard ===")
 
-    channel_dir = _pick_channel(HERE / "channels")
+    channel_dir = _pick_or_create_channel(HERE / "channels")
     env = _read_env(channel_dir / ".env")
+    _apply_env_to_os(env)  # so Gemini auto-topic can read keys
 
-    # Layout: always ask (changes per video)
     layout = _menu("Pick a video layout:", LAYOUTS, default_idx=0)
 
-    # Language: skip if .env has DEFAULT_TARGET_LANG
-    lang = env.get("DEFAULT_TARGET_LANG", "").strip()
-    if lang:
-        print(f"\nLanguage: {lang} (from .env DEFAULT_TARGET_LANG — skipping prompt)")
+    target = env.get("DEFAULT_TARGET_LANG", "").strip()
+    if target:
+        print(f"\nTarget language: {target} ({LANG_NAME.get(target, '?')})  ← from .env")
     else:
-        lang = _menu(
-            "Pick the language to teach:",
-            [(code, f"{name} ({code})") for code, name, _ in LANGS],
+        target = _menu(
+            "Pick the language to teach (target):",
+            [(c, f"{n} ({c})") for c, n in LANGS],
             default_idx=0,
         )
 
-    # Voice: skip if .env has DEFAULT_VOICE_GENDER
+    native = env.get("DEFAULT_NATIVE_LANG", "").strip()
+    if native:
+        print(f"Native language: {native} ({LANG_NAME.get(native, '?')})  ← from .env")
+    else:
+        native = _menu(
+            "Pick the on-screen translation language (native):",
+            [(c, f"{n} ({c})") for c, n in LANGS],
+            default_idx=8,
+        )
+
     voice = env.get("DEFAULT_VOICE_GENDER", "").strip().lower()
     if voice in {"any", "female", "male"}:
-        print(f"Voice: {voice} (from .env DEFAULT_VOICE_GENDER — skipping prompt)")
+        print(f"Voice: {voice}  ← from .env")
     else:
         voice = _menu("Pick a voice:", VOICES, default_idx=0)
 
-    # Topic: always ask, free-text
-    print()
-    topic = _ask_text("Topic (e.g. 'ordering coffee', 'kitchen items')")
+    topic = _topic_phase(channel_dir, env, target)
 
-    # Summary + confirm
     print("\n─── Summary ───")
     print(f"  channel : {channel_dir.name}")
     print(f"  layout  : {layout}")
-    print(f"  lang    : {lang}")
+    print(f"  target  : {target} ({LANG_NAME.get(target, '?')})")
+    print(f"  native  : {native} ({LANG_NAME.get(native, '?')})")
     print(f"  voice   : {voice}")
     print(f"  topic   : {topic}")
     if not _confirm("\nRender now?"):
         sys.exit("Cancelled.")
 
     return argparse.Namespace(
-        channel=channel_dir.name,
-        layout=layout, lang=lang, topic=topic, voice=voice, count=10,
+        channel=channel_dir.name, layout=layout, lang=target, native=native,
+        topic=topic, voice=voice, count=10,
     )
 
 
@@ -194,25 +379,20 @@ def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--channel", default="myvideo", help="Channel folder under channels/")
     p.add_argument("--layout", choices=layout_keys, help="Video layout")
-    p.add_argument("--lang", help="Target language code (de, ru, ja, ko, zh, en, fr, es, vi, ...)")
-    p.add_argument("--topic", help='Topic, e.g. "ordering coffee"')
+    p.add_argument("--lang", help="Target language code")
+    p.add_argument("--native", help="Native (translation) language code")
+    p.add_argument("--topic", help='Topic text (omit to use auto-gen in wizard)')
     p.add_argument("--count", type=int, default=10)
     p.add_argument("--voice", choices=["female", "male", "any"], default="any")
     args = p.parse_args()
-
     if not (args.layout and args.lang and args.topic):
         return _wizard()
+    args.native = args.native or "vi"
     return args
 
 
 # ── Request builder ──────────────────────────────────────────────────
 def _build_request(args: argparse.Namespace) -> str:
-    """Build the natural-language request the generator parses.
-
-    Requests are written in Vietnamese because that's what topic_picker
-    emits in production and the generator's examples are tuned for it.
-    The target language is whatever --lang says.
-    """
     lang_vi = LANG_VI.get(args.lang, args.lang.upper())
     voice_clause = f", giọng {args.voice}" if args.voice != "any" else ""
 
@@ -260,19 +440,18 @@ def main() -> int:
     if not env_file.exists():
         sys.exit(
             f"ERROR: {env_file} not found.\n"
-            f"  Create it: cp .env.example channels/{args.channel}/.env\n"
-            f"  Then open it and paste your GEMINI_API_KEYS."
+            f"  Run RUN.bat / ./RUN.sh with no args to create one interactively."
         )
 
     request = _build_request(args)
 
-    # Hand off to the engine (auto_post reads CHANNEL_DIR + .env)
     os.environ["CHANNEL_DIR"] = str(channel_dir)
     os.environ["AUTO_POST_ENABLED"] = "true"
-    os.environ["DEMO_MODE"] = "1"               # skip FB upload + Telegram notify
+    os.environ["DEMO_MODE"] = "1"
     os.environ["_DEMO_LAYOUT"] = args.layout
     os.environ["_DEMO_REQUEST"] = request
     os.environ["DEFAULT_TARGET_LANG"] = args.lang
+    os.environ["DEFAULT_NATIVE_LANG"] = args.native
     os.environ["DEFAULT_VOICE_GENDER"] = args.voice
     os.environ.pop("TELEGRAM_BOT_TOKEN", None)
     os.environ.pop("TELEGRAM_NOTIFY_BOT_TOKEN", None)
@@ -281,7 +460,8 @@ def main() -> int:
     sys.path.insert(0, str(bot_dir))
     import auto_post  # noqa: E402
 
-    print(f"\n[lingora] channel={args.channel} layout={args.layout} lang={args.lang}")
+    print(f"\n[lingora] channel={args.channel} layout={args.layout} "
+          f"target={args.lang} native={args.native}")
     print(f"[lingora] topic={args.topic!r}")
     print(f"[lingora] working in {channel_dir}\n")
 
