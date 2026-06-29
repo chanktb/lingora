@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary:        {{ theme.primary }};
+        --primary-light:  {{ theme.primary_light }};
+        --primary-soft:   {{ theme.primary_soft }};
+        --accent:         {{ theme.accent }};
+        --accent-gold:    {{ theme.accent_gold }};
+        --bg-grad:        {{ theme.bg_grad }};
+        --primary-rgb:    {{ theme.primary_shadow_rgb }};
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: #0a0e27;
+        font-family: "Inter", "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        color: #fff;
+      }
+      .clip { position: absolute; }
+
+      /* PHOTO SCENE — full screen 4:5 */
+      #scene { top: 0; left: 0; width: 1080px; height: 1920px; overflow: hidden; }
+      #scene img { width: 100%; height: 100%; object-fit: cover; }
+      #scene-overlay {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+        background: linear-gradient(180deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.58) 100%);
+        pointer-events: none;
+      }
+
+      /* TITLE PILL — 2 lines */
+      #title-wrap { top: 345px; left: 90px; right: 90px; text-align: center; }
+      #title-pill {
+        display: inline-block;
+        padding: 18px 44px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+        backdrop-filter: blur(12px);
+        border: 2px solid rgba(255,255,255,0.30);
+        border-radius: 40px;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.65);
+      }
+      .title-line1 {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 44px; font-weight: 900;
+        color: #fff;
+        letter-spacing: 1.8px;
+        text-transform: uppercase;
+        line-height: 1.10;
+      }
+      .title-line2 {
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 30px; font-weight: 700;
+        color: var(--accent-gold);
+        letter-spacing: 0.8px;
+        margin-top: 8px;
+        line-height: 1.15;
+      }
+
+      /* SENTENCE WITH BLANK */
+      #sentence-wrap { top: 605px; left: 90px; right: 90px; text-align: center; }
+      #sentence-text {
+        display: inline-block;
+        padding: 32px 60px;
+        background: linear-gradient(135deg, #1e88e5, #1565c0);
+        border-radius: 30px;
+        box-shadow: 0 14px 38px rgba(0,0,0,0.6);
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 76px; font-weight: 900;
+        color: #fff; line-height: 1.18;
+        max-width: 900px;  /* matches Reels safe-content width 90-990px */
+      }
+      .sentence-blank {
+        display: inline-block;
+        min-width: 220px;
+        border-bottom: 12px solid #fff;
+        margin: 0 12px;
+        vertical-align: bottom;
+      }
+
+      /* 3 OPTIONS — white pills with A/B/C label. Highlight class toggled
+         by JS in sync with the audio narration reading each option.
+         NO answer revealed. */
+      #options-wrap {
+        top: 955px; left: 0; right: 0; text-align: center;
+      }
+      .option-box {
+        display: inline-block;
+        vertical-align: top;
+        margin: 0 14px;
+        position: relative;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+      }
+      .option-label {
+        position: absolute;
+        top: -30px; left: 50%;
+        transform: translateX(-50%);
+        width: 64px; height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        color: #fff;
+        font-family: "Inter", "Be Vietnam Pro", sans-serif;
+        font-size: 32px; font-weight: 900;
+        line-height: 64px;
+        text-align: center;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.45),
+                    0 0 0 3px rgba(255,255,255,0.30);
+        z-index: 2;
+      }
+      .option-chip {
+        display: inline-block;
+        padding: 26px 54px;
+        background: linear-gradient(135deg, #fff, #f5f5f5);
+        border: 5px solid rgba(255,255,255,0.55);
+        border-radius: 26px;
+        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 58px; font-weight: 800;
+        color: #1a0f2e;
+        min-width: 180px;
+        transition: transform 0.25s ease, border-color 0.25s ease,
+                    box-shadow 0.25s ease;
+      }
+      /* Highlight ring + bounce + glowing border when this option is being
+         read aloud. Composer wires .option-box[data-opt='A'].is-active. */
+      .option-box.is-active { transform: translateY(-14px) scale(1.06); }
+      .option-box.is-active .option-chip {
+        border-color: var(--accent-gold);
+        box-shadow: 0 14px 36px rgba(0,0,0,0.65),
+                    0 0 0 6px rgba(255, 215, 0, 0.55),
+                    0 0 50px rgba(255, 215, 0, 0.45);
+      }
+
+      /* BRAND ROW (single, big) */
+      #brand-row {
+        top: 1435px; left: 0; right: 0;
+        display: flex; flex-direction: row; align-items: center; justify-content: center;
+        gap: 20px;
+      }
+      .brand-logo {
+        display: flex; align-items: center; justify-content: center;
+        width: 80px; height: 80px;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        border-radius: 50%;
+        box-shadow: 0 8px 22px rgba(var(--primary-rgb), 0.55);
+      }
+      .brand-logo img { width: 78%; height: 78%; object-fit: contain; border-radius: 50%; }
+      .brand-emoji { font-size: 50px; line-height: 1; }
+      .brand-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 48px; font-weight: 900; color: #fff;
+        text-shadow: 0 4px 18px rgba(0, 0, 0, 0.75);
+      }
+      #tagline {
+        top: 1545px; left: 0; right: 0;
+        text-align: center; padding: 0 60px;
+        font-family: "Inter", sans-serif;
+        font-size: 30px; font-weight: 600;
+        color: rgba(255,255,255,0.95); letter-spacing: 0.5px;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.8);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div id="scene" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">
+        <img src="static/scene.png" alt="scene" />
+      </div>
+      <div id="scene-overlay" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1"></div>
+
+      <div id="title-wrap" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="2">
+        <div id="title-pill">
+          {%- if ':' in title_native -%}
+            {%- set tparts = title_native.split(':', 1) -%}
+            <div class="title-line1">{{ tparts[0]|trim }}</div>
+            <div class="title-line2">{{ tparts[1]|trim }} · {{ title_target }}</div>
+          {%- else -%}
+            <div class="title-line1">{{ title_native }}</div>
+            <div class="title-line2">{{ title_target }}</div>
+          {%- endif -%}
+        </div>
+      </div>
+
+      <div id="sentence-wrap" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="3">
+        <div id="sentence-text">
+          {%- set parts = sentence_template.split('___') -%}
+          {{- parts[0] -}}
+          <span class="sentence-blank"></span>
+          {{- parts[1] if parts|length > 1 else '' -}}
+        </div>
+      </div>
+
+      <div id="options-wrap" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="4">
+        {% for opt in options %}
+        <span class="option-box" data-opt="{{ ['A','B','C','D'][loop.index0] }}">
+          <span class="option-label">{{ ['A','B','C','D'][loop.index0] }}</span>
+          <span class="option-chip">{{ opt }}</span>
+        </span>
+        {% endfor %}
+      </div>
+
+      {% if not demo_mode %}
+      <div id="brand-row" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="5">
+        <div class="brand-logo">
+          {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span class="brand-emoji">{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span class="brand-name">{{ channel_name }}</span>
+      </div>
+
+      <div id="tagline" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="6">{{ channel_tagline }}</div>
+      {% endif %}
+    </div>
+
+    <script>
+      function autoFitByLength(rules) {
+        for (const rule of rules) {
+          document.querySelectorAll(rule.selector).forEach(el => {
+            el.style.fontSize = "";
+            const len = (el.textContent || "").trim().length;
+            const baseFs = parseFloat(getComputedStyle(el).fontSize);
+            let scale = 1;
+            for (const step of rule.scale_steps) {
+              if (len > step.above) scale = step.scale;
+            }
+            if (scale < 1) {
+              el.style.fontSize = (baseFs * scale).toFixed(0) + "px";
+            }
+          });
+        }
+      }
+      autoFitByLength([
+        { selector: ".title-line1", scale_steps: [
+            { above: 22, scale: 0.85 },
+            { above: 30, scale: 0.72 },
+          ]},
+        { selector: ".title-line2", scale_steps: [
+            { above: 30, scale: 0.85 },
+            { above: 42, scale: 0.72 },
+          ]},
+        { selector: "#sentence-text", scale_steps: [
+            { above: 26, scale: 0.88 },
+            { above: 36, scale: 0.74 },
+            { above: 48, scale: 0.60 },
+          ]},
+        { selector: ".option-chip", scale_steps: [
+            { above: 6,  scale: 0.85 },
+            { above: 10, scale: 0.70 },
+            { above: 14, scale: 0.55 },
+          ]},
+      ]);
+    </script>
+  </body>
+</html>

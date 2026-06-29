@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: linear-gradient(160deg, #fff7ea 0%, #fde6f0 45%, #e5f1ff 100%);
+        font-family: "Be Vietnam Pro", "Inter",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        color: #2b2547;
+      }
+      .clip {
+        position: absolute;
+        top: 0; left: 0;
+        width: 1080px; height: 1920px;
+      }
+
+      .blob {
+        position: absolute; border-radius: 50%;
+        filter: blur(80px); opacity: 0.55;
+        pointer-events: none;
+      }
+      .blob-1 { top: -120px; left: -120px; width: 540px; height: 540px;
+                background: radial-gradient(circle, #ffd2a8 0%, transparent 70%); }
+      .blob-2 { bottom: -100px; right: -120px; width: 500px; height: 500px;
+                background: radial-gradient(circle, #b8dcff 0%, transparent 70%); }
+      .blob-3 { top: 720px; right: -200px; width: 460px; height: 460px;
+                background: radial-gradient(circle, #ffc4d8 0%, transparent 70%); }
+
+      #title-native {
+        position: absolute;
+        top: 340px; left: 90px; right: 90px;
+        text-align: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 88px; font-weight: 900;
+        color: #2b2547;
+        letter-spacing: 1.5px;
+        line-height: 1.0;
+      }
+      #title-flags {
+        position: absolute;
+        top: 480px; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
+        gap: 18px;
+      }
+      .title-flag {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 80px; height: 80px;
+        background: #fff;
+        border-radius: 50%;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+        font-size: 52px;
+      }
+      .title-arrow {
+        font-family: "Inter", sans-serif;
+        font-size: 44px; color: #ff7eb9;
+        font-weight: 900;
+      }
+
+      #word-counter {
+        position: absolute;
+        top: 580px; left: 0; right: 0;
+        text-align: center;
+        font-family: "Inter", sans-serif;
+        font-size: 30px; font-weight: 700;
+        color: #ff5d8f; letter-spacing: 6px;
+      }
+
+      .word-card {
+        position: absolute;
+        top: 640px; left: 90px; right: 90px;
+        height: 430px;
+        background: #fff;
+        border-radius: 44px;
+        box-shadow: 0 20px 50px rgba(124, 90, 168, 0.18);
+        border: 4px solid rgba(255, 255, 255, 0.9);
+      }
+
+      /* Rows inside card */
+      .r-native {
+        position: absolute;
+        top: 36px; left: 24px; right: 24px;
+        text-align: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 56px; font-weight: 900;
+        color: #2b2547;
+        line-height: 1.0;
+      }
+      .r-pos {
+        position: absolute;
+        top: 110px; left: 24px; right: 24px;
+        text-align: center;
+        font-family: "Inter", sans-serif;
+        font-size: 24px; font-weight: 500;
+        color: #9b8bbb;
+        font-style: italic;
+        line-height: 1.0;
+      }
+      .r-hint {
+        position: absolute;
+        top: 170px; left: 24px; right: 24px;
+        text-align: center;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 60px; font-weight: 700;
+        color: #5b9bd5;
+        letter-spacing: 4px;
+        line-height: 1.0;
+        white-space: nowrap;
+      }
+      .r-target {
+        position: absolute;
+        top: 160px; left: 24px; right: 24px;
+        text-align: center;
+        font-family: "Be Vietnam Pro",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 76px; font-weight: 900;
+        color: #ec4899;
+        line-height: 1.0;
+        letter-spacing: 0.5px;
+      }
+      .r-time {
+        position: absolute;
+        top: 280px; left: 0; right: 0;
+        text-align: center;
+        font-family: "Inter", sans-serif;
+        line-height: 1.0;
+        font-weight: 900;
+      }
+      .r-time .time-label {
+        font-size: 22px; color: #9b8bbb;
+        letter-spacing: 4px;
+        font-weight: 700;
+        vertical-align: middle;
+      }
+      .r-time .time-num {
+        font-size: 64px; color: #ff5d8f;
+        margin-left: 12px;
+        vertical-align: middle;
+      }
+      .r-ipa {
+        position: absolute;
+        top: 270px; left: 24px; right: 24px;
+        text-align: center;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 28px; font-weight: 500;
+        color: #6b6786;
+        line-height: 1.0;
+      }
+      .r-example {
+        position: absolute;
+        top: 330px; left: 24px; right: 24px;
+        text-align: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 24px; font-weight: 500;
+        color: #6b6786;
+        font-style: italic;
+        line-height: 1.2;
+      }
+
+      #countdown-bar-wrap {
+        position: absolute;
+        top: 1380px; left: 180px; right: 180px;
+        height: 18px;
+      }
+      .countdown-bar-track {
+        width: 100%; height: 100%;
+        background: rgba(91, 155, 213, 0.18);
+        border-radius: 9px;
+        overflow: hidden;
+      }
+      .countdown-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #66bb6a 0%, #ffca28 60%, #ff5d8f 100%);
+        border-radius: 9px;
+        transform-origin: left center;
+      }
+
+      #brand-row {
+        position: absolute;
+        top: 1500px; left: 90px; right: 90px;
+        display: flex; align-items: center; justify-content: center;
+        gap: 18px;
+      }
+      #brand-row .brand-logo {
+        width: 56px; height: 56px; border-radius: 50%;
+        background: linear-gradient(135deg, #ffb88b, #ff7eb9);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 30px;
+        overflow: hidden;
+      }
+      #brand-row .brand-logo img { width: 100%; height: 100%; object-fit: cover; }
+      #brand-row .brand-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 32px; font-weight: 800;
+        color: #2b2547;
+      }
+      #tagline {
+        position: absolute;
+        top: 1565px; left: 0; right: 0;
+        text-align: center;
+        font-size: 22px; color: #6b6786;
+        font-weight: 500;
+      }
+      /* TIME number cycling 3 → 2 → 1 over countdown.
+         IMPORTANT (CEO 2026-06-16 bug): animation-delay set INLINE per
+         word using its absolute start time so each word's countdown
+         fires at the right moment in the timeline. Without this, all
+         .cdbar elements would animate simultaneously at page load and
+         only word 1's countdown would be visible. Use `both` fill-mode
+         so element shows initial state BEFORE delay and final state
+         AFTER end. */
+      .tnum { opacity: 0; }
+      .t3 { animation: tn-3 3s linear; animation-fill-mode: both; }
+      .t2 { animation: tn-2 3s linear; animation-fill-mode: both; }
+      .t1 { animation: tn-1 3s linear; animation-fill-mode: both; }
+      @keyframes tn-3 {
+        0%, 32% { opacity: 1; }
+        33%, 100% { opacity: 0; }
+      }
+      @keyframes tn-2 {
+        0%, 32% { opacity: 0; }
+        33%, 65% { opacity: 1; }
+        66%, 100% { opacity: 0; }
+      }
+      @keyframes tn-1 {
+        0%, 65% { opacity: 0; }
+        66%, 100% { opacity: 1; }
+      }
+      .cdbar { animation: cd 3s linear; animation-fill-mode: both; }
+      @keyframes cd {
+        from { transform: scaleX(1); }
+        to   { transform: scaleX(0); }
+      }
+
+      /* ───── OUTRO HERO CARD ───── */
+      #outro-emoji {
+        position: absolute;
+        top: 660px; left: 0; right: 0;
+        text-align: center;
+        font-size: 220px;
+        line-height: 1.0;
+        animation: pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+        animation-fill-mode: both;
+      }
+      #outro-badge {
+        position: absolute;
+        top: 920px; left: 0; right: 0;
+        text-align: center;
+        font-family: "Inter", sans-serif;
+        font-size: 96px; font-weight: 900;
+        color: #ff5d8f;
+        letter-spacing: 12px;
+        line-height: 1.0;
+        text-transform: uppercase;
+      }
+      #outro-badge .badge-num {
+        color: #2b2547;
+        margin-right: 18px;
+      }
+      #outro-cta {
+        position: absolute;
+        top: 1080px; left: 90px; right: 90px;
+        text-align: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 56px; font-weight: 800;
+        color: #2b2547;
+        line-height: 1.2;
+        letter-spacing: 0.5px;
+      }
+      @keyframes pop {
+        0%   { transform: scale(0.35); opacity: 0; }
+        70%  { transform: scale(1.08); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+
+    {# Title + flag — ALWAYS visible #}
+    <div class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">
+      <div id="title-native">{{ title_native }}</div>
+      <div id="title-flags">
+        <span class="title-flag">{{ native_flag }}</span>
+        <span class="title-arrow">→</span>
+        <span class="title-flag">{{ target_flag }}</span>
+      </div>
+    </div>
+
+    {# Brand row + tagline + footer — always visible #}
+    {% if not demo_mode %}
+    <div class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1">
+      <div id="brand-row">
+        <div class="brand-logo">
+          {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span>{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span class="brand-name">{{ channel_name }}</span>
+      </div>
+      {% if channel_tagline %}<div id="tagline">{{ channel_tagline }}</div>{% endif %}
+    </div>
+    {% endif %}
+
+    {% for w in words %}
+    {# ───── HINT PHASE — ALL rows in ONE clip ───── #}
+    <div class="clip" data-start="{{ w.start }}" data-duration="{{ w.countdown_duration }}" data-track-index="3">
+      <div id="word-counter">{{ w.idx }} / {{ words|length }}</div>
+      <div class="word-card">
+        <div class="r-native">{{ w.native_translation }}</div>
+        <div class="r-pos">({{ w.part_of_speech_label }})</div>
+        <div class="r-hint">{{ w.first_letter_hint }}</div>
+        <div class="r-time">
+          <span class="time-label">TIME</span>
+          <span class="time-num tnum t3" style="animation-delay: {{ w.start }}s;">3</span>
+          <span class="time-num tnum t2" style="animation-delay: {{ w.start }}s;">2</span>
+          <span class="time-num tnum t1" style="animation-delay: {{ w.start }}s;">1</span>
+        </div>
+      </div>
+      <div id="countdown-bar-wrap">
+        <div class="countdown-bar-track">
+          <div class="countdown-bar-fill cdbar" style="animation-delay: {{ w.start }}s;"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ───── REVEAL PHASE — ALL rows in ONE clip ───── #}
+    <div class="clip" data-start="{{ w.reveal_start }}" data-duration="{{ w.reveal_slot }}" data-track-index="3">
+      <div id="word-counter">{{ w.idx }} / {{ words|length }}</div>
+      <div class="word-card">
+        <div class="r-native">{{ w.native_translation }}</div>
+        <div class="r-pos">({{ w.part_of_speech_label }})</div>
+        <div class="r-target">{{ w.target_word }}</div>
+        {% if w.ipa %}<div class="r-ipa">{{ w.ipa }}</div>{% endif %}
+        {% if w.example_sentence %}<div class="r-example">{{ w.example_sentence }}</div>{% endif %}
+      </div>
+    </div>
+
+    {# Chime ticks at countdown 3, 2, 1 #}
+    {% if has_chime %}
+    <audio data-start="{{ w.start }}"        data-duration="0.6" data-track-index="50" src="static/chime.mp3"></audio>
+    <audio data-start="{{ w.start + 1.0 }}"  data-duration="0.6" data-track-index="51" src="static/chime.mp3"></audio>
+    <audio data-start="{{ w.start + 2.0 }}"  data-duration="0.6" data-track-index="52" src="static/chime.mp3"></audio>
+    {% endif %}
+
+    {# Reveal voice #}
+    <audio data-start="{{ w.reveal_voice_start }}"
+           data-duration="{{ w.reveal_voice_duration }}"
+           data-track-index="{{ 60 + w.idx }}"
+           src="assets/audio/reveal_{{ w.idx }}.wav"></audio>
+    {% endfor %}
+
+    {# ───── OUTRO HERO CARD — celebratory completion ───── #}
+    {%- set _done_label = {
+      "vi": "HOÀN THÀNH",
+      "en": "DONE",
+      "ko": "완료",
+      "ja": "完了",
+      "zh": "完成",
+      "de": "FERTIG",
+      "fr": "TERMINÉ",
+      "es": "HECHO",
+      "ru": "ГОТОВО",
+    }.get(native_lang, "DONE") -%}
+    <div class="clip" data-start="{{ outro_start }}" data-duration="{{ outro_slot }}" data-track-index="4">
+      <div id="outro-emoji">🎉</div>
+      <div id="outro-badge">
+        <span class="badge-num">{{ words_count }}/{{ words_count }}</span>
+        <span>{{ _done_label }}</span>
+      </div>
+      <div id="outro-cta">{{ outro_text }}</div>
+    </div>
+
+    {# Outro voice overlay #}
+    <audio data-start="{{ outro_voice_start }}"
+           data-duration="{{ outro_voice_duration }}"
+           data-track-index="80"
+           src="assets/audio/outro_native.wav"></audio>
+
+    </div>{# /#root #}
+
+    <script>
+      function autoFitByLength(rules) {
+        for (const rule of rules) {
+          document.querySelectorAll(rule.selector).forEach(el => {
+            el.style.fontSize = "";
+            const len = (el.textContent || "").trim().length;
+            const baseFs = parseFloat(getComputedStyle(el).fontSize);
+            let scale = 1;
+            for (const step of rule.scale_steps) {
+              if (len > step.above) scale = step.scale;
+            }
+            if (scale < 1) {
+              el.style.fontSize = (baseFs * scale).toFixed(0) + "px";
+            }
+          });
+        }
+      }
+      autoFitByLength([
+        { selector: "#title-native", scale_steps: [
+            { above: 14, scale: 0.85 }, { above: 22, scale: 0.70 } ]},
+        { selector: ".r-native", scale_steps: [
+            { above: 16, scale: 0.85 }, { above: 24, scale: 0.70 }, { above: 32, scale: 0.58 } ]},
+        { selector: ".r-hint", scale_steps: [
+            { above: 17, scale: 0.85 }, { above: 22, scale: 0.70 }, { above: 28, scale: 0.58 } ]},
+        { selector: ".r-target", scale_steps: [
+            { above: 12, scale: 0.85 }, { above: 18, scale: 0.72 }, { above: 26, scale: 0.58 } ]},
+        { selector: ".r-example", scale_steps: [
+            { above: 40, scale: 0.90 }, { above: 60, scale: 0.78 }, { above: 80, scale: 0.65 } ]},
+        { selector: "#outro-cta", scale_steps: [
+            { above: 50, scale: 0.88 }, { above: 80, scale: 0.74 }, { above: 110, scale: 0.62 } ]},
+        { selector: "#outro-badge", scale_steps: [
+            { above: 12, scale: 0.88 }, { above: 16, scale: 0.74 } ]},
+      ]);
+    </script>
+  </body>
+</html>

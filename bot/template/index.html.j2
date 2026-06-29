@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary:        {{ theme.primary }};
+        --primary-light:  {{ theme.primary_light }};
+        --primary-soft:   {{ theme.primary_soft }};
+        --accent:         {{ theme.accent }};
+        --accent-gold:    {{ theme.accent_gold }};
+        --ipa-color:      {{ theme.ipa_color }};
+        --bg-grad:        {{ theme.bg_grad }};
+        --halo-1:         {{ theme.halo_1 }};
+        --halo-2:         {{ theme.halo_2 }};
+        --halo-3:         {{ theme.halo_3 }};
+        --primary-rgb:    {{ theme.primary_shadow_rgb }};
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: #0a0e27; font-family: "Inter", "Be Vietnam Pro", sans-serif;
+        color: #fff;
+      }
+      #bg {
+        position: absolute; inset: 0;
+        background:
+          radial-gradient(ellipse 700px 700px at 10% 10%, var(--halo-1), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 90% 90%, var(--halo-2), transparent 60%),
+          radial-gradient(ellipse 500px 500px at 50% 50%, var(--halo-3), transparent 60%),
+          var(--bg-grad);
+      }
+      /* AI scene mode: replace bg-grad with darkened scene image at bottom of stack.
+         Halo gradients (transparent at edges) overlay → theme colors blend onto scene. */
+      #bg.has-scene-bg {
+        background:
+          radial-gradient(ellipse 700px 700px at 10% 10%, var(--halo-1), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 90% 90%, var(--halo-2), transparent 60%),
+          radial-gradient(ellipse 500px 500px at 50% 50%, var(--halo-3), transparent 60%),
+          linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.65) 100%),
+          url("static/scene.png") center/cover no-repeat;
+      }
+      .grain {
+        position: absolute; inset: 0; opacity: 0.10; pointer-events: none;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      }
+      .vignette {
+        position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+      }
+      .clip { position: absolute; will-change: transform, opacity; }
+
+      /* Sticky header — y bumped 180→290 to clear TikTok username/avatar overlay
+         (Reels 4:5 safe zone starts at y=285). L/R bumped 60→90 to match the
+         L/R rail clearance the rest of the lesson uses. */
+      #sticky-header { top: 290px; left: 90px; right: 90px; text-align: center; }
+      #sticky-title {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 66px; font-weight: 900; color: #fff;
+        line-height: 1.1; margin-bottom: 14px;
+        text-shadow: 0 4px 18px rgba(0,0,0,0.55);
+        letter-spacing: 2px; text-transform: uppercase;
+      }
+      #sticky-subtitle {
+        font-family: "Inter", sans-serif;
+        font-size: 36px; font-weight: 600;
+        color: var(--primary-light);
+        opacity: 0.92;
+        line-height: 1.2; font-style: italic;
+        letter-spacing: 1.5px; text-transform: uppercase;
+      }
+
+      /* Intro title — padding 60→90 to respect L/R rail */
+      #title-wrap { top: 440px; left: 0; right: 0; text-align: center; padding: 0 90px; }
+      /* Universal "learning content" chip — fixed phrase tells viewers at a
+         glance this is a language-learning lesson (channel-localized lang name
+         + auto-increment lesson number for series feel + FOMO). */
+      #title-topic {
+        display: inline-block;
+        padding: 16px 44px;
+        margin-bottom: 32px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+        border: 2.5px solid rgba(255,255,255,0.40);
+        backdrop-filter: blur(8px);
+        border-radius: 70px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 48px; font-weight: 800;
+        color: var(--accent-gold);
+        letter-spacing: 1.5px; text-transform: uppercase;
+        text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      }
+      #title-topic .topic-num {
+        color: #fff;
+        margin-left: 14px;
+      }
+      #title-text {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 130px; font-weight: 900;
+        color: #fff; line-height: 1.1;
+        letter-spacing: 1px; text-transform: uppercase;
+        text-shadow: 0 6px 30px rgba(0,0,0,0.6);
+        padding: 0 10px; margin-bottom: 28px;
+      }
+      #title-subtitle {
+        font-family: "Inter", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR", sans-serif;
+        font-size: 64px; font-weight: 600;
+        color: var(--primary-light);
+        line-height: 1.15; opacity: 0.92;
+        letter-spacing: 1px;
+        text-shadow: 0 4px 18px rgba(0,0,0,0.5);
+        padding: 0 10px;
+      }
+
+      /* Phrase card — L/R 60→90 to respect Reels rail clearance */
+      .phrase { top: 360px; left: 90px; right: 90px; text-align: center; }
+      .number-pill {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(20px);
+        border: 1.5px solid rgba(255, 255, 255, 0.25);
+        color: #fff; padding: 14px 38px; border-radius: 60px;
+        font-family: "Inter", sans-serif;
+        font-size: 38px; font-weight: 800; letter-spacing: 2px;
+        margin-bottom: 50px;
+      }
+      .target {
+        /* "Noto Sans CJK SC" = system font installed on VPS (dnf google-noto-sans-cjk-vf-fonts).
+           Google Fonts CDN ("Noto Sans SC") is unreliable inside HF Chromium — fall back to system. */
+        font-family: "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR",
+                     "Be Vietnam Pro", "Inter", sans-serif;
+        font-size: 110px; font-weight: 900; color: #fff;
+        line-height: 1.05;
+        text-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        margin-bottom: 36px;
+        word-wrap: break-word; overflow-wrap: anywhere; padding: 0 20px;
+      }
+      .pronunciation {
+        font-family: "Inter", sans-serif;
+        font-size: 50px; font-weight: 400; font-style: italic;
+        color: var(--primary-light); line-height: 1.25; margin-bottom: 14px;
+      }
+      .ipa {
+        font-family: "Consolas", "Courier New", "Inter", monospace;
+        font-size: 36px; font-weight: 400;
+        color: var(--ipa-color);
+        letter-spacing: 0.5px; line-height: 1.2;
+        margin-bottom: 32px;
+      }
+      .voice-wave {
+        display: flex; justify-content: center; align-items: center;
+        gap: 10px; height: 70px; margin-bottom: 40px;
+      }
+      .voice-wave .bar {
+        width: 12px;
+        background: linear-gradient(to top, var(--primary), var(--primary-light));
+        border-radius: 6px;
+        box-shadow: 0 0 16px rgba(var(--primary-rgb), 0.6);
+        transform-origin: 50% 50%; will-change: transform;
+      }
+      .voice-wave .bar:nth-child(1) { height: 26px; }
+      .voice-wave .bar:nth-child(2) { height: 48px; }
+      .voice-wave .bar:nth-child(3) { height: 62px; }
+      .voice-wave .bar:nth-child(4) { height: 48px; }
+      .voice-wave .bar:nth-child(5) { height: 26px; }
+      .meaning-box {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--primary), var(--primary-soft));
+        padding: 28px 50px; border-radius: 28px;
+        box-shadow: 0 16px 48px rgba(var(--primary-rgb), 0.45);
+      }
+      .meaning {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 58px; font-weight: 800; color: #fff; line-height: 1.18;
+      }
+
+      /* OUTRO card — padding 60→90 to respect L/R rail */
+      #outro-wrap {
+        top: 380px; left: 0; right: 0;
+        text-align: center; padding: 0 90px;
+      }
+      #outro-emoji {
+        font-size: 200px; line-height: 1; margin-bottom: 40px;
+        font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+        filter: drop-shadow(0 8px 24px rgba(0,0,0,0.5));
+      }
+      #outro-heading {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 100px; font-weight: 900;
+        background: linear-gradient(90deg, var(--accent-gold), var(--primary), var(--primary-soft));
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.0; letter-spacing: -1px;
+        margin-bottom: 40px;
+        text-shadow: 0 4px 20px rgba(var(--primary-rgb), 0.4);
+      }
+      #outro-text {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 56px; font-weight: 700; color: #fff;
+        line-height: 1.3; padding: 0 40px;
+        text-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        margin-bottom: 60px;
+      }
+      #outro-cta {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        padding: 24px 60px; border-radius: 80px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 50px; font-weight: 900;
+        text-transform: uppercase; letter-spacing: 2px;
+        box-shadow: 0 16px 48px rgba(var(--primary-rgb), 0.5);
+      }
+
+      /* Brand row */
+      #brand-row {
+        position: absolute; bottom: 460px; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
+        gap: 22px; padding: 0 60px;
+      }
+      .brand-logo {
+        width: 80px; height: 80px; border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+      }
+      .brand-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .brand-logo .brand-emoji {
+        font-size: 46px; line-height: 1;
+        font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+      }
+      .brand-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 50px; font-weight: 800; color: #fff;
+        text-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+        letter-spacing: -0.5px; white-space: nowrap;
+      }
+      #tagline {
+        position: absolute; bottom: 380px; left: 0; right: 0;
+        text-align: center; padding: 0 60px;
+        font-family: "Inter", sans-serif;
+        font-size: 30px; font-weight: 500;
+        color: var(--primary-light); opacity: 0.85; letter-spacing: 0.5px;
+      }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- BACKGROUND -->
+      <div id="bg" class="clip{% if has_scene %} has-scene-bg{% endif %}" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">
+        <div class="grain"></div>
+        <div class="vignette"></div>
+      </div>
+
+      <!-- INTRO TITLE — universal learning chip + UPPERCASE topic + target lang sub -->
+      <div id="title-wrap" class="clip" data-start="0" data-duration="{{ intro.slot }}" data-track-index="1">
+        <div id="title-topic">{% if native_lang == "en" %}Learn {{ target_lang_name }}<span class="topic-num">· Lesson #{{ post_number }}</span>{% else %}Học Tiếng {{ target_lang_name }}<span class="topic-num">· Bài #{{ post_number }}</span>{% endif %}</div>
+        <div id="title-text">{{ short_title }}</div>
+        {% if short_title_target and short_title_target != short_title %}
+        <div id="title-subtitle">{{ short_title_target }}</div>
+        {% endif %}
+      </div>
+
+      <!-- (Sticky header removed: lives in 4:5 crop zone, redundant with intro)
+
+      -->
+
+      <!-- PHRASE CARDS -->
+      {% for p in phrases %}
+      <div id="p{{ p.idx }}" class="clip phrase" data-start="{{ p.start }}" data-duration="{{ p.slot }}" data-track-index="2">
+        <div class="number-pill">{{ "%02d" % p.idx }} / {{ phrases|length }}</div>
+        <div class="target">{{ p.target }}</div>
+        {% if p.pronunciation %}<div class="pronunciation">{{ p.pronunciation }}</div>{% endif %}
+        {% if p.ipa %}<div class="ipa">{{ p.ipa }}</div>{% endif %}
+        <div class="voice-wave">
+          <div class="bar wb-{{ p.idx }}-1"></div>
+          <div class="bar wb-{{ p.idx }}-2"></div>
+          <div class="bar wb-{{ p.idx }}-3"></div>
+          <div class="bar wb-{{ p.idx }}-4"></div>
+          <div class="bar wb-{{ p.idx }}-5"></div>
+        </div>
+        <div class="meaning-box"><div class="meaning">{{ p.native }}</div></div>
+      </div>
+      {% endfor %}
+
+      <!-- OUTRO CARD (kept in demo: LIKE & FOLLOW CTA is part of the format) -->
+      <div id="outro-wrap" class="clip" data-start="{{ outro.start }}" data-duration="{{ outro.slot }}" data-track-index="2">
+        <div id="outro-emoji">🎉</div>
+        <div id="outro-heading">{% if native_lang == "en" %}THANK YOU!{% else %}CẢM ƠN BẠN!{% endif %}</div>
+        <div id="outro-text">{{ outro_text }}</div>
+        <div id="outro-cta">❤️ LIKE &amp; FOLLOW 🔔</div>
+      </div>
+
+      {% if not demo_mode %}
+      {# HyperFrames: each full-span visual needs its own track. brand-row + tagline both have start=0 + full duration → must be on different tracks. #}
+      <!-- BRAND ROW -->
+      <div id="brand-row" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="6">
+        <div class="brand-logo">
+          {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span class="brand-emoji">{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span class="brand-name">{{ channel_name }}</span>
+      </div>
+
+      <!-- TAGLINE -->
+      <div id="tagline" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7">{{ channel_tagline }}</div>
+      {% endif %}
+
+      <!-- ===== AUDIO ===== -->
+      {% if use_master_audio %}
+      {#  v5 cumulative-drift fix 2026-06-16:
+          composer pre-mixes ALL clips (chime + intro + per-phrase target+vi
+          + outro) into a single master.wav. HF then sees exactly ONE audio
+          element → per-clip mixer overhead can't accumulate. #}
+      <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/master.wav"></audio>
+      {% else %}
+      {% if has_chime %}
+      <!-- Chime for intro -->
+      <audio id="chime-intro" class="clip" data-start="{{ intro.chime_start }}" data-duration="0.5" data-track-index="4" data-volume="0.95" src="static/chime.mp3"></audio>
+      <!-- Chime per phrase -->
+      {% for p in phrases %}
+      <audio id="chime-p{{ p.idx }}" class="clip" data-start="{{ p.chime_start }}" data-duration="0.5" data-track-index="4" data-volume="0.95" src="static/chime.mp3"></audio>
+      {% endfor %}
+      {% endif %}
+
+      <!-- Intro VI voice -->
+      <audio id="audio-intro-vi" class="clip" data-start="{{ intro.voice_start }}" data-duration="{{ intro.voice_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/intro_vi.wav"></audio>
+
+      <!-- Per phrase: target + vi -->
+      {% for p in phrases %}
+      <audio id="audio-p{{ p.idx }}-target" class="clip" data-start="{{ p.target_audio_start }}" data-duration="{{ p.target_audio_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/p{{ p.idx }}_target.wav"></audio>
+      <audio id="audio-p{{ p.idx }}-vi"     class="clip" data-start="{{ p.vi_audio_start }}"     data-duration="{{ p.vi_audio_duration }}"     data-track-index="5" data-volume="1.0" src="assets/audio/p{{ p.idx }}_vi.wav"></audio>
+      {% endfor %}
+
+      <!-- Outro VI voice -->
+      <audio id="audio-outro-vi" class="clip" data-start="{{ outro.voice_start }}" data-duration="{{ outro.voice_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/outro_vi.wav"></audio>
+      {% endif %}
+    </div>
+
+    <script>
+      // ─── Auto-fit text: shrink font when text is too long ───
+      function autoFitByLength(rules) {
+        // rules: [{selector, max_len, scale_steps: [{above, scale}, ...]}]
+        for (const rule of rules) {
+          document.querySelectorAll(rule.selector).forEach(el => {
+            const len = (el.textContent || "").trim().length;
+            const cs = getComputedStyle(el);
+            const baseFs = parseFloat(cs.fontSize);
+            let scale = 1;
+            for (const step of rule.scale_steps) {
+              if (len > step.above) scale = step.scale;
+            }
+            if (scale < 1) {
+              el.style.fontSize = (baseFs * scale).toFixed(0) + "px";
+            }
+          });
+        }
+      }
+      autoFitByLength([
+        { selector: "#title-text", scale_steps: [
+            { above: 14, scale: 0.88 },
+            { above: 20, scale: 0.75 },
+            { above: 28, scale: 0.62 },
+          ]},
+        { selector: "#title-subtitle", scale_steps: [
+            { above: 18, scale: 0.85 },
+            { above: 26, scale: 0.70 },
+            { above: 36, scale: 0.58 },
+          ]},
+        { selector: ".target", scale_steps: [
+            { above: 18, scale: 0.85 },
+            { above: 26, scale: 0.72 },
+            { above: 36, scale: 0.60 },
+            { above: 50, scale: 0.48 },
+          ]},
+        { selector: ".meaning", scale_steps: [
+            { above: 26, scale: 0.85 },
+            { above: 36, scale: 0.72 },
+            { above: 48, scale: 0.60 },
+            { above: 60, scale: 0.50 },
+          ]},
+      ]);
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const TOTAL = {{ total_duration }};
+
+      tl.to(".brand-logo", { scale: 1.06, duration: 1.5, repeat: Math.ceil(TOTAL / 3), yoyo: true, ease: "sine.inOut" }, 0);
+
+      // INTRO — topic chip + title + subtitle. Sticky header removed (4:5 crop zone).
+      tl.from("#title-topic", { y: -40, scale: 0.7, opacity: 0, duration: 0.7, ease: "back.out(2)" }, 0.1);
+      tl.from("#title-text", { y: 100, opacity: 0, duration: 0.8, ease: "power3.out" }, 0.3);
+      if (document.querySelector("#title-subtitle")) {
+        tl.from("#title-subtitle", { y: 50, opacity: 0, duration: 0.6, ease: "power3.out" }, 0.65);
+      }
+      tl.to(["#title-topic", "#title-text", "#title-subtitle"].filter(s => document.querySelector(s)),
+            { opacity: 0, y: -40, scale: 0.92, duration: 0.45, ease: "power2.in" }, {{ intro.slot }} - 0.45);
+
+      // Brand + tagline early fade-in
+      tl.from("#brand-row", { y: 30, opacity: 0, duration: 0.9, ease: "power2.out" }, 0.4);
+      tl.from("#tagline",   { y: 20, opacity: 0, duration: 0.9, ease: "power2.out" }, 0.6);
+
+      // PHRASE CARDS
+      const phraseStarts = [{% for p in phrases %}{{ p.start }}{% if not loop.last %}, {% endif %}{% endfor %}];
+      const phraseSlots  = [{% for p in phrases %}{{ p.slot }}{% if not loop.last %}, {% endif %}{% endfor %}];
+      const viStarts     = [{% for p in phrases %}{{ p.vi_audio_start }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
+      phraseStarts.forEach((start, i) => {
+        const idx = i + 1;
+        const sel = `#p${idx}`;
+        const slot = phraseSlots[i];
+        const viStart = viStarts[i];
+
+        tl.from(`${sel} .number-pill`,   { scale: 0.5, opacity: 0, duration: 0.4, ease: "back.out(2)" }, start);
+        tl.from(`${sel} .target`,        { y: 70, opacity: 0, duration: 0.55, ease: "power3.out" }, start + 0.15);
+        tl.from(`${sel} .pronunciation`, { y: 35, opacity: 0, duration: 0.55, ease: "power2.out" }, start + 0.40);
+        tl.from(`${sel} .ipa`,           { y: 25, opacity: 0, duration: 0.45, ease: "power2.out" }, start + 0.55);
+        tl.from(`${sel} .voice-wave`,    { scale: 0.7, opacity: 0, duration: 0.45, ease: "back.out(1.6)" }, start + 0.65);
+        tl.from(`${sel} .meaning-box`,   { scale: 0.7, opacity: 0, duration: 0.55, ease: "back.out(1.8)" }, start + 0.85);
+
+        // When VI translation plays, pulse meaning-box (indicate this is the part being read)
+        tl.to(`${sel} .meaning-box`, { scale: 1.08, duration: 0.3, ease: "power2.out" }, viStart);
+        tl.to(`${sel} .meaning-box`, { scale: 1.0,  duration: 0.4, ease: "power2.inOut" }, viStart + 0.3);
+
+        const cycles = Math.max(2, Math.ceil(slot / 0.35));
+        for (let bar = 1; bar <= 5; bar++) {
+          tl.to(`.wb-${idx}-${bar}`, {
+            scaleY: 1.6, duration: 0.28,
+            repeat: cycles, yoyo: true, ease: "sine.inOut",
+          }, start + 0.6 + bar * 0.06);
+        }
+
+        tl.to(sel, { opacity: 0, scale: 0.92, duration: 0.4, ease: "power2.in" }, start + slot - 0.4);
+      });
+
+      // OUTRO entrance
+      const outroStart = {{ outro.start }};
+      tl.from("#outro-emoji",   { scale: 0, rotation: 180, duration: 0.8, ease: "back.out(2.2)" }, outroStart + 0.05);
+      tl.from("#outro-heading", { y: 60, opacity: 0, duration: 0.7, ease: "power3.out" }, outroStart + 0.30);
+      tl.from("#outro-text",    { y: 40, opacity: 0, duration: 0.7, ease: "power2.out" }, outroStart + 0.55);
+      tl.from("#outro-cta",     { scale: 0.5, opacity: 0, duration: 0.6, ease: "back.out(1.8)" }, outroStart + 0.85);
+      // CTA pulse during outro
+      tl.to("#outro-cta", { scale: 1.06, duration: 0.5, repeat: Math.max(3, Math.ceil(({{ outro.slot }} - 1) / 1.0)), yoyo: true, ease: "sine.inOut" }, outroStart + 1.5);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

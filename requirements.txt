@@ -1,0 +1,8 @@
+# Lingora — public CLI dependencies
+# (production-only deps like python-telegram-bot are in bot/requirements.txt
+#  and not needed for the local one-video-per-run CLI.)
+
+google-genai>=0.3.0
+edge-tts>=6.1.12
+jinja2>=3.1.4
+python-dotenv>=1.0.1

@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary:        {{ theme.primary }};
+        --primary-light:  {{ theme.primary_light }};
+        --primary-soft:   {{ theme.primary_soft }};
+        --accent:         {{ theme.accent }};
+        --accent-gold:    {{ theme.accent_gold }};
+        --ipa-color:      {{ theme.ipa_color }};
+        --bg-grad:        {{ theme.bg_grad }};
+        --halo-1:         {{ theme.halo_1 }};
+        --halo-2:         {{ theme.halo_2 }};
+        --halo-3:         {{ theme.halo_3 }};
+        --primary-rgb:    {{ theme.primary_shadow_rgb }};
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: #0a0e27;
+        font-family: "Inter", "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        color: #fff;
+      }
+      #bg {
+        position: absolute; inset: 0;
+        background:
+          radial-gradient(ellipse 700px 700px at 10% 10%, var(--halo-1), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 90% 90%, var(--halo-2), transparent 60%),
+          radial-gradient(ellipse 500px 500px at 50% 50%, var(--halo-3), transparent 60%),
+          var(--bg-grad);
+      }
+      .grain {
+        position: absolute; inset: 0; opacity: 0.10; pointer-events: none;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      }
+      .vignette {
+        position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+      }
+      .clip { position: absolute; will-change: transform, opacity; }
+
+      /* ───── ROUND (per item) — all content inside FB Reels safe zone (270-1620) ───── */
+      .round {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+      }
+
+      /* PERSISTENT TITLE STRIP — shown for the FULL video duration so the
+         FB Reel / Story thumbnail (which FB picks from t≈0-2s) always
+         displays the native-language title. Two-line stack: chip + title. */
+      /* Persistent title strip — y bumped 240→290 to clear TikTok username
+         overlay, L/R bumped 50→90 to clear Reels share rail. */
+      #wt-title-wrap {
+        position: absolute; top: 290px; left: 90px; right: 90px;
+        text-align: center;
+        pointer-events: none;
+      }
+      #wt-title-chip {
+        display: inline-block;
+        padding: 12px 28px;
+        background: rgba(0,0,0,0.55);
+        border: 2px solid var(--accent-gold);
+        border-radius: 999px;
+        font-family: "Inter", sans-serif;
+        font-size: 28px; font-weight: 700; letter-spacing: 2px;
+        color: var(--accent-gold);
+        text-transform: uppercase;
+        margin-bottom: 14px;
+      }
+      #wt-title-text {
+        font-family: "Be Vietnam Pro", "Inter", sans-serif;
+        font-size: 64px; font-weight: 900; line-height: 1.10;
+        color: #fff;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        text-shadow: 0 6px 22px rgba(0,0,0,0.65);
+      }
+
+      /* Per-round question. Top 430→330 (no longer has title strip above). */
+      .round-question {
+        position: absolute; top: 330px; left: 90px; right: 90px;
+        text-align: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 56px; font-weight: 800; line-height: 1.12;
+        color: rgba(255,255,255,0.92);
+        letter-spacing: 1px;
+        text-shadow: 0 6px 22px rgba(0,0,0,0.65);
+      }
+
+      /* Image moved up to follow the question and shrunk slightly so the
+         reveal card below has room without overlapping the brand row. */
+      .round-image-wrap {
+        position: absolute; top: 470px; left: 270px;
+        width: 540px; height: 540px;
+        border-radius: 38px; overflow: hidden;
+        background: #fff;
+        box-shadow:
+          0 18px 46px rgba(0,0,0,0.5),
+          0 0 0 5px rgba(255,255,255,0.10),
+          0 0 60px rgba(var(--primary-rgb), 0.35);
+      }
+      .round-image-wrap img {
+        display: block; width: 100%; height: 100%; object-fit: cover;
+      }
+
+      /* Countdown: SVG ring (time draining) + number 3/2/1 inside.
+         Sits AT reveal-card position — replaces target-q after it hides. */
+      /* Countdown ring — shrunk 300→220 + moved up so it stays inside the
+         image footprint (image now ends at y=1010) and never overlaps the
+         brand row at y=1430. */
+      .round-countdown-wrap {
+        position: absolute; top: 1050px; left: 0; right: 0;
+        text-align: center;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .round-countdown-ring {
+        display: inline-block;
+        position: relative;
+        width: 220px; height: 220px;
+        filter: drop-shadow(0 0 30px rgba(255, 200, 0, 0.55));
+      }
+      .round-countdown-ring svg {
+        width: 100%; height: 100%;
+        transform: rotate(-90deg);  /* start sweep from top */
+      }
+      .ring-track {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.14);
+        stroke-width: 16;
+      }
+      .ring-progress {
+        fill: none;
+        stroke: var(--accent-gold);
+        stroke-width: 16;
+        stroke-linecap: round;
+        /* Circumference for r=130: 2*pi*130 ≈ 817 (SVG viewBox stays 300×300
+           so we keep the same r=130 + dasharray; the OUTER box CSS scales it). */
+        stroke-dasharray: 817;
+        stroke-dashoffset: 0;
+      }
+      .round-countdown-num {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 130px; font-weight: 900;
+        line-height: 1;
+        color: var(--accent-gold);
+        text-shadow:
+          0 0 40px rgba(255, 200, 0, 0.85),
+          0 0 80px rgba(255, 100, 0, 0.6);
+        z-index: 2;
+      }
+      /* Legacy selector (kept so old GSAP refs don't break if any cached) */
+      .round-countdown { display: none; }
+
+      /* Target-language question overlay (same slot as reveal card).
+         Shown during question voice, hidden when countdown starts. */
+      .round-target-q {
+        position: absolute; top: 1080px; left: 90px; right: 90px;
+        text-align: center; opacity: 0;
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 60px; font-weight: 800; line-height: 1.1;
+        color: var(--primary-light);
+        text-shadow: 0 5px 22px rgba(0,0,0,0.6),
+                     0 0 32px rgba(var(--primary-rgb), 0.45);
+        letter-spacing: 0.5px;
+      }
+
+      /* Reveal card — moved up + sized down so bottom edge sits comfortably
+         above the brand row at y=1430 even with the longest 2-line target
+         word. Was top:1170, target 80px, pron 36px, ipa 24px, vn 46px =>
+         ~280px tall; brand row started at 1430 with only 30px buffer.
+         Now top:1060, padding tightened, total ~250px max => ~120px buffer. */
+      .round-reveal {
+        position: absolute; top: 1060px; left: 90px; right: 90px;
+        text-align: center; opacity: 0;
+      }
+      .reveal-card {
+        display: inline-block;
+        background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+        border: 3px solid var(--accent-gold);
+        border-radius: 32px;
+        padding: 20px 44px 18px;
+        max-width: 820px;
+        box-shadow:
+          0 12px 40px rgba(0,0,0,0.55),
+          0 0 60px rgba(255, 200, 0, 0.32);
+        backdrop-filter: blur(8px);
+      }
+      .reveal-target {
+        font-family: "Be Vietnam Pro", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR", sans-serif;
+        font-size: 72px; font-weight: 900; line-height: 1.05;
+        background: linear-gradient(90deg, #fff, var(--accent-gold));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text; color: transparent;
+        margin-bottom: 4px;
+      }
+      .reveal-pron {
+        font-family: "Inter", sans-serif;
+        font-size: 30px; font-weight: 600;
+        color: var(--primary-light); opacity: 0.95;
+        margin-bottom: 2px;
+      }
+      .reveal-ipa {
+        font-family: "Inter", sans-serif;
+        font-size: 22px; font-weight: 500; font-style: italic;
+        color: var(--ipa-color);
+        margin-bottom: 8px;
+      }
+      .reveal-vn {
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 2px solid rgba(255, 255, 255, 0.18);
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 38px; font-weight: 800;
+        color: var(--accent-gold);
+        text-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+      }
+      .reveal-vn .vn-flag { margin-right: 8px; font-size: 30px; }
+
+      /* ───── OUTRO CARD ───── */
+      #outro-card {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 0 80px; text-align: center;
+      }
+      #outro-text {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 64px; font-weight: 900; line-height: 1.2;
+        color: var(--accent-gold);
+        text-shadow: 0 8px 28px rgba(0,0,0,0.6);
+        margin-bottom: 30px;
+        max-width: 920px;
+      }
+      #outro-cta {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        color: #fff; padding: 22px 56px; border-radius: 70px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 44px; font-weight: 900;
+        letter-spacing: 2px;
+        box-shadow: 0 12px 36px rgba(var(--primary-rgb), 0.6);
+      }
+
+      /* ───── BRAND ROW (pushed UP into safe zone) ───── */
+      #brand-row {
+        position: absolute; top: 1430px; left: 0; right: 0;
+        display: flex; flex-direction: row; align-items: center; justify-content: center;
+        gap: 22px;
+      }
+      .brand-logo {
+        display: flex; align-items: center; justify-content: center;
+        width: 84px; height: 84px;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        border-radius: 50%;
+        box-shadow: 0 8px 22px rgba(var(--primary-rgb), 0.5);
+      }
+      .brand-logo img { width: 78%; height: 78%; object-fit: contain; border-radius: 50%; }
+      .brand-emoji { font-size: 52px; line-height: 1; }
+      .brand-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 44px; font-weight: 800; color: #fff;
+        text-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+        letter-spacing: -0.5px;
+      }
+      #tagline {
+        position: absolute; top: 1540px; left: 0; right: 0;
+        text-align: center; padding: 0 60px;
+        font-family: "Inter", sans-serif;
+        font-size: 26px; font-weight: 500;
+        color: var(--primary-light); opacity: 0.85; letter-spacing: 0.5px;
+      }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- BACKGROUND (track 0, full span) -->
+      <div id="bg" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">
+        <div class="grain"></div>
+        <div class="vignette"></div>
+      </div>
+
+      <!-- Persistent title strip removed (CEO 2026-06-13): the per-round
+           question + channel name already identify the lesson; the duplicate
+           "LEARN RUSSIAN / RUSSIAN EMOTIONS" pair ate vertical space and
+           clashed with the reveal card on long answers. -->
+
+      <!-- 10 ROUNDS (track 1, sequential, start at 0 — no intro) -->
+      {% for item in items %}
+      <div class="round clip" id="round-{{ item.idx }}"
+           data-start="{{ item.start }}" data-duration="{{ item.slot }}" data-track-index="1">
+        <div class="round-question" id="round-q-{{ item.idx }}">{{ display_question }}</div>
+
+        <div class="round-image-wrap" id="round-img-{{ item.idx }}">
+          <img src="static/{{ item.image_filename }}" alt="" />
+        </div>
+
+        <!-- Target-language question text — shown WHILE voice reads it, hidden at countdown -->
+        <div class="round-target-q" id="round-tq-{{ item.idx }}">{{ item.voice_question }}</div>
+
+        <!-- SVG ring countdown — time draining + number 3/2/1 inside -->
+        <div class="round-countdown-wrap" id="round-cd-{{ item.idx }}">
+          <div class="round-countdown-ring">
+            <svg viewBox="0 0 300 300">
+              <circle class="ring-track" cx="150" cy="150" r="130" />
+              <circle class="ring-progress" id="round-cd-ring-{{ item.idx }}" cx="150" cy="150" r="130" />
+            </svg>
+            <div class="round-countdown-num" id="round-cd-num-{{ item.idx }}">3</div>
+          </div>
+        </div>
+
+        <div class="round-reveal" id="round-reveal-{{ item.idx }}">
+          <div class="reveal-card">
+            <div class="reveal-target">{{ item.target_word }}</div>
+            {% if item.pronunciation %}<div class="reveal-pron">{{ item.pronunciation }}</div>{% endif %}
+            {% if item.ipa %}<div class="reveal-ipa">{{ item.ipa }}</div>{% endif %}
+            <div class="reveal-vn"><span class="vn-flag">{{ native_flag|default('🇻🇳') }}</span>{{ item.native_answer }}</div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- OUTRO CARD (track 1, after last round) -->
+      <div id="outro-card" class="clip" data-start="{{ outro.start }}" data-duration="{{ outro.slot }}" data-track-index="1">
+        <div id="outro-text">{{ outro_text }}</div>
+        <div id="outro-cta">💬 LIKE & FOLLOW</div>
+      </div>
+
+      {% if not demo_mode %}
+      <!-- BRAND ROW (track 2, full span, pushed up into safe zone) -->
+      <div id="brand-row" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="2">
+        <div class="brand-logo">
+          {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span class="brand-emoji">{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span class="brand-name">{{ channel_name }}</span>
+      </div>
+
+      <!-- TAGLINE (track 3, full span) -->
+      <div id="tagline" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="3">{{ channel_tagline }}</div>
+      {% endif %}
+
+      <!-- ===== AUDIO ===== -->
+      {% if use_master_audio %}
+      {#  v5 cumulative-drift fix 2026-06-16: all 21 voice clips + 30 countdown
+          chimes pre-mixed by composer into 1 master.wav. HF schedules ONE audio
+          element → no per-clip mixer overhead → no cumulative drift. #}
+      <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="4" data-volume="1.0" src="assets/audio/master.wav"></audio>
+      {% else %}
+      <!-- Track 4: voice (all non-overlapping in time) — NO intro_vi -->
+      {% for item in items %}
+      <audio id="audio-q-{{ item.idx }}" class="clip"
+             data-start="{{ item.question_audio_start }}" data-duration="{{ item.question_audio_duration }}"
+             data-track-index="4" data-volume="1.0"
+             src="assets/audio/q_{{ item.idx }}.wav"></audio>
+      <audio id="audio-r-{{ item.idx }}" class="clip"
+             data-start="{{ item.reveal_audio_start }}" data-duration="{{ item.reveal_audio_duration }}"
+             data-track-index="4" data-volume="1.0"
+             src="assets/audio/r_{{ item.idx }}.wav"></audio>
+      {% endfor %}
+
+      <audio id="audio-outro-vi" class="clip"
+             data-start="{{ outro.voice_start }}" data-duration="{{ outro.voice_duration }}"
+             data-track-index="4" data-volume="1.0"
+             src="assets/audio/outro_vi.wav"></audio>
+
+      <!-- Track 5: countdown chimes (each 0.45s, non-overlapping) -->
+      {% if has_chime %}
+      {% for item in items %}
+      <audio class="clip" data-start="{{ item.countdown_start }}" data-duration="0.45" data-track-index="5" data-volume="0.85" src="static/chime.mp3"></audio>
+      <audio class="clip" data-start="{{ (item.countdown_start + 0.5)|round(2) }}" data-duration="0.45" data-track-index="5" data-volume="0.85" src="static/chime.mp3"></audio>
+      <audio class="clip" data-start="{{ (item.countdown_start + 1.0)|round(2) }}" data-duration="0.45" data-track-index="5" data-volume="0.85" src="static/chime.mp3"></audio>
+      {% endfor %}
+      {% endif %}
+      {% endif %}
+
+    </div>
+    <!-- /#root -->
+
+    <script>
+      // Auto-fit for very long target words / questions
+      function autoFitByLength(rules) {
+        for (const rule of rules) {
+          document.querySelectorAll(rule.selector).forEach(el => {
+            const len = (el.textContent || "").trim().length;
+            const baseFs = parseFloat(getComputedStyle(el).fontSize);
+            let scale = 1;
+            for (const step of rule.scale_steps) {
+              if (len > step.above) scale = step.scale;
+            }
+            if (scale < 1) {
+              el.style.fontSize = (baseFs * scale).toFixed(0) + "px";
+            }
+          });
+        }
+      }
+      autoFitByLength([
+        // Persistent title across all rounds. Bumped down for long native
+        // titles like "Đồ Dùng Trong Nhà Bếp Của Bà Ngoại" (35 chars).
+        { selector: "#wt-title-text", scale_steps: [
+            { above: 18, scale: 0.88 },
+            { above: 26, scale: 0.74 },
+            { above: 34, scale: 0.60 },
+          ]},
+        { selector: ".round-question", scale_steps: [
+            { above: 20, scale: 0.88 },
+            { above: 26, scale: 0.78 },
+            { above: 32, scale: 0.68 },
+          ]},
+        { selector: ".round-target-q", scale_steps: [
+            { above: 10, scale: 0.92 },
+            { above: 16, scale: 0.80 },
+            { above: 22, scale: 0.66 },
+          ]},
+        { selector: ".reveal-target", scale_steps: [
+            { above: 10, scale: 0.88 },
+            { above: 16, scale: 0.72 },
+            { above: 22, scale: 0.58 },
+          ]},
+        { selector: ".reveal-pron", scale_steps: [
+            { above: 18, scale: 0.85 },
+            { above: 26, scale: 0.70 },
+          ]},
+      ]);
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const TOTAL = {{ total_duration }};
+
+      // Brand subtle breathing throughout
+      tl.to(".brand-logo", { scale: 1.06, duration: 1.5, repeat: Math.ceil(TOTAL / 3), yoyo: true, ease: "sine.inOut" }, 0);
+
+      // PER-ROUND animations
+      {% for item in items %}
+      {
+        const round = "#round-{{ item.idx }}";
+        const q     = "#round-q-{{ item.idx }}";
+        const img   = "#round-img-{{ item.idx }}";
+        const tq    = "#round-tq-{{ item.idx }}";
+        const cd    = "#round-cd-{{ item.idx }}";
+        const rev   = "#round-reveal-{{ item.idx }}";
+
+        // Initial states
+        tl.set(round, { opacity: 1 }, {{ item.start }});
+        tl.set(q,     { opacity: 0, y: -30 }, {{ item.start }});
+        tl.set(img,   { opacity: 0, scale: 0.7 }, {{ item.start }});
+        tl.set(tq,    { opacity: 0, y: 30, scale: 0.9 }, {{ item.start }});
+        tl.set(cd,    { opacity: 0, scale: 0.5 }, {{ item.start }});
+        tl.set(rev,   { opacity: 0, y: 50, scale: 0.92 }, {{ item.start }});
+
+        // Question text snaps in with voice (frame 0 of round = hook)
+        tl.to(q, { opacity: 1, y: 0, duration: 0.40, ease: "back.out(1.7)" }, {{ item.question_text_start }});
+
+        // Image fades in
+        tl.to(img, { opacity: 1, scale: 1.0, duration: 0.50, ease: "back.out(1.4)" }, {{ item.image_start }});
+
+        // Target-language question overlay (same slot as reveal card) — visible WHILE voice reads
+        tl.to(tq, { opacity: 1, y: 0, scale: 1.0, duration: 0.45, ease: "back.out(1.5)" }, {{ item.question_audio_start }});
+        // Hide right before countdown starts
+        tl.to(tq, { opacity: 0, y: -20, scale: 0.92, duration: 0.30, ease: "power2.in" }, {{ item.countdown_start }} - 0.25);
+
+        // ─── Countdown: SVG ring drains 1.5s + number swaps 3 → 2 → 1 ───
+        const cdRing = "#round-cd-ring-{{ item.idx }}";
+        const cdNum  = "#round-cd-num-{{ item.idx }}";
+
+        // Ring/wrap fade in at countdown start
+        tl.fromTo(cd,
+          { opacity: 0, scale: 0.6 },
+          { opacity: 1, scale: 1.0, duration: 0.25, ease: "back.out(1.7)" },
+          {{ item.countdown_start }});
+
+        // Ring drains over 1.5s — full sweep from 0 → 817 (full circumference) = empty ring
+        tl.fromTo(cdRing,
+          { attr: { "stroke-dashoffset": 0 } },
+          { attr: { "stroke-dashoffset": 817 }, duration: 1.5, ease: "none" },
+          {{ item.countdown_start }});
+
+        // Number swaps each 0.5s with a soft pulse — text content swap, no full fade
+        tl.call(() => { const e = document.querySelector(cdNum); if (e) e.textContent = "3"; }, null, {{ item.countdown_start }} - 0.001);
+        tl.fromTo(cdNum,
+          { scale: 1.3 },
+          { scale: 1.0, duration: 0.30, ease: "back.out(2)" },
+          {{ item.countdown_start }});
+
+        tl.call(() => { const e = document.querySelector(cdNum); if (e) e.textContent = "2"; }, null, {{ item.countdown_start }} + 0.499);
+        tl.fromTo(cdNum,
+          { scale: 1.3 },
+          { scale: 1.0, duration: 0.30, ease: "back.out(2)" },
+          {{ item.countdown_start }} + 0.5);
+
+        tl.call(() => { const e = document.querySelector(cdNum); if (e) e.textContent = "1"; }, null, {{ item.countdown_start }} + 0.999);
+        tl.fromTo(cdNum,
+          { scale: 1.3 },
+          { scale: 1.0, duration: 0.30, ease: "back.out(2)" },
+          {{ item.countdown_start }} + 1.0);
+
+        // Ring + number fade out as reveal card slides in
+        tl.to(cd, { opacity: 0, scale: 0.85, duration: 0.30, ease: "power2.in" }, {{ item.countdown_start }} + 1.45);
+
+        // Reveal card slides up
+        tl.to(rev, { opacity: 1, y: 0, scale: 1.0, duration: 0.55, ease: "back.out(1.6)" }, {{ item.reveal_start }});
+
+        // Pulse target word when its voice plays
+        tl.to(rev + " .reveal-target", { scale: 1.08, duration: 0.30, ease: "power2.out" }, {{ item.reveal_audio_start }});
+        tl.to(rev + " .reveal-target", { scale: 1.0,  duration: 0.40, ease: "power2.inOut" }, {{ item.reveal_audio_start }} + 0.35);
+      }
+      {% endfor %}
+
+      // OUTRO
+      tl.set("#outro-card", { opacity: 0 }, {{ outro.start }});
+      tl.to("#outro-card",  { opacity: 1, duration: 0.4 }, {{ outro.start }});
+      tl.from("#outro-text", { y: -40, opacity: 0, duration: 0.6, ease: "power3.out" }, {{ outro.voice_start }} - 0.2);
+      tl.from("#outro-cta",  { scale: 0.7, opacity: 0, duration: 0.6, ease: "back.out(2)" }, {{ outro.voice_start }} + 0.2);
+      tl.to("#outro-cta", {
+        scale: 1.06,
+        duration: 0.55,
+        repeat: Math.max(2, Math.ceil(({{ outro.slot }} - 0.7) / 1.1)),
+        yoyo: true,
+        ease: "sine.inOut",
+      }, {{ outro.voice_start }} + 0.8);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

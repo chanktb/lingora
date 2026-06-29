@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary:        {{ theme.primary }};
+        --primary-light:  {{ theme.primary_light }};
+        --primary-soft:   {{ theme.primary_soft }};
+        --accent:         {{ theme.accent }};
+        --accent-gold:    {{ theme.accent_gold }};
+        --ipa-color:      {{ theme.ipa_color }};
+        --bg-grad:        {{ theme.bg_grad }};
+        --halo-1:         {{ theme.halo_1 }};
+        --halo-2:         {{ theme.halo_2 }};
+        --halo-3:         {{ theme.halo_3 }};
+        --primary-rgb:    {{ theme.primary_shadow_rgb }};
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: #0a0e27;
+        font-family: "Inter", "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        color: #fff;
+      }
+      .clip { position: absolute; will-change: transform, opacity; }
+
+      /* ───── BACKGROUND SCENE (full screen, dim overlay) ───── */
+      #bg-scene {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+        background-color: #0a0e27;
+        overflow: hidden;
+      }
+      #bg-scene img {
+        width: 100%; height: 100%; object-fit: cover;
+        opacity: 0.78;
+      }
+      #bg-overlay {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+        background:
+          radial-gradient(ellipse 700px 700px at 10% 10%, var(--halo-1), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 90% 90%, var(--halo-2), transparent 60%),
+          linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.45) 100%);
+        mix-blend-mode: multiply;
+        pointer-events: none;
+      }
+      .grain {
+        position: absolute; inset: 0; opacity: 0.08; pointer-events: none;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      }
+
+      /* ───── TOP HEADER (brand + title) ───── */
+      #brand-row {
+        top: 290px; left: 0; right: 0;
+        display: flex; flex-direction: row; align-items: center; justify-content: center;
+        gap: 16px;
+      }
+      .brand-logo {
+        display: flex; align-items: center; justify-content: center;
+        width: 60px; height: 60px;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        border-radius: 50%;
+        box-shadow: 0 6px 16px rgba(var(--primary-rgb), 0.5);
+      }
+      .brand-logo img { width: 78%; height: 78%; object-fit: contain; border-radius: 50%; }
+      .brand-emoji { font-size: 36px; line-height: 1; }
+      .brand-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 32px; font-weight: 800; color: #fff;
+        text-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+      }
+
+      /* TOP — target lang gold pill, smaller, subtle. Was VN uppercase pill. */
+      #title-target-wrap {
+        top: 390px; left: 0; right: 0; text-align: center;
+      }
+      /* Yellow border pill — FIXED visual size; long phrases shrink via JS
+         autoFitByLength below so the box never overflows the safe zone. */
+      #title-target {
+        display: inline-block;
+        max-width: 880px;
+        padding: 10px 32px;
+        border: 2px solid rgba(255, 215, 0, 0.30);
+        border-radius: 56px;
+        background: rgba(0,0,0,0.35);
+        backdrop-filter: blur(6px);
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 48px; font-weight: 800;
+        color: var(--accent-gold);
+        letter-spacing: 0.5px;
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-shadow: 0 3px 10px rgba(0,0,0,0.7);
+      }
+      /* BOTTOM — VN, BIG white UPPERCASE, no border. The visual anchor.
+         left/right 100px matches the char-wrap safety zone — title never
+         overflows the visible area on Reels. Larger line-height keeps
+         multi-line titles from stacking too tightly. */
+      #title-native {
+        top: 475px; left: 100px; right: 100px; text-align: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 70px; font-weight: 900;
+        color: #fff; line-height: 1.18;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        text-shadow: 0 8px 28px rgba(0,0,0,0.8),
+                     0 0 40px rgba(0,0,0,0.5);
+      }
+
+      /* ───── CHARACTER PORTRAITS (bottom corners, comfortable margin) ───── */
+      .char-wrap {
+        top: 940px;
+        display: flex; flex-direction: column; align-items: center;
+        transition: none;
+      }
+      #char-a-wrap { left: 100px; }      /* was 50, +50 breathing room */
+      #char-b-wrap { right: 100px; }
+      .char-portrait {
+        width: 280px; height: 320px;     /* was 320×360, slightly smaller */
+        border-radius: 28px; overflow: hidden;
+        background: #fff;
+        border: 4px solid rgba(255,255,255,0.40);
+        box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+        filter: saturate(0.6) brightness(0.7);
+        transition: none;
+      }
+      .char-portrait.active {
+        border-color: var(--accent-gold);
+        filter: saturate(1.1) brightness(1.0);
+        box-shadow:
+          0 12px 34px rgba(0,0,0,0.55),
+          0 0 50px rgba(255, 200, 0, 0.55);
+      }
+      .char-portrait img {
+        display: block; width: 100%; height: 100%; object-fit: cover;
+      }
+      .char-label {
+        margin-top: 12px;
+        text-align: center;
+      }
+      .char-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 30px; font-weight: 800; color: #fff;
+        text-shadow: 0 3px 10px rgba(0,0,0,0.7);
+        line-height: 1.0;
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .char-role {
+        font-family: "Inter", sans-serif;
+        font-size: 22px; font-weight: 500; color: var(--primary-light);
+        opacity: 0.85; line-height: 1.0; margin-top: 4px;
+      }
+
+      /* ───── SPEECH BUBBLES ───── */
+      .bubble {
+        position: absolute;
+        max-width: 540px;
+        padding: 22px 30px;
+        border-radius: 28px;
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 40px; font-weight: 700;
+        color: #1a0f2e;
+        line-height: 1.18;
+        box-shadow: 0 10px 28px rgba(0,0,0,0.6);
+        opacity: 0;
+        z-index: 5;
+      }
+      .bubble.a {
+        background: linear-gradient(135deg, #fff, #ffe9a8);
+        border: 3px solid var(--accent-gold);
+        top: 700px; left: 380px;
+      }
+      .bubble.a::after {
+        content: ""; position: absolute;
+        bottom: -22px; left: 40px;
+        border: 16px solid transparent;
+        border-top-color: var(--accent-gold);
+        border-bottom: 0;
+      }
+      .bubble.b {
+        background: linear-gradient(135deg, #fff, #c8e8ff);
+        border: 3px solid var(--primary);
+        top: 700px; right: 380px;
+      }
+      .bubble.b::after {
+        content: ""; position: absolute;
+        bottom: -22px; right: 40px;
+        border: 16px solid transparent;
+        border-top-color: var(--primary);
+        border-bottom: 0;
+      }
+
+      /* ───── SUB BAR (bottom safe zone) — match char-wrap 100px safety zone
+         so it never hits Reels share/save UI on the right edge. ───── */
+      #sub-bar {
+        top: 1370px; left: 100px; right: 100px;
+        padding: 22px 32px;
+        border-radius: 28px;
+        background: linear-gradient(135deg, rgba(10,14,39,0.85), rgba(20,10,46,0.85));
+        border: 2px solid rgba(255,255,255,0.18);
+        box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+        backdrop-filter: blur(12px);
+        text-align: center;
+      }
+      #sub-target {
+        font-family: "Be Vietnam Pro",
+          "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+          "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 50px; font-weight: 900;
+        color: #fff; line-height: 1.1;
+        text-shadow: 0 4px 16px rgba(0,0,0,0.7);
+        margin-bottom: 10px;
+        min-height: 60px;
+      }
+      #sub-pron {
+        font-family: "Inter", sans-serif;
+        font-size: 28px; font-weight: 500; font-style: italic;
+        color: var(--primary-light);
+        opacity: 0.92;
+        margin-bottom: 8px;
+        min-height: 34px;
+      }
+      #sub-vn {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 36px; font-weight: 800;
+        color: var(--accent-gold);
+        line-height: 1.1;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.55);
+        min-height: 40px;
+      }
+
+      /* ───── OUTRO CARD ───── */
+      #outro-card {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 0 80px; text-align: center;
+        background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.75));
+      }
+      #outro-text {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 64px; font-weight: 900; line-height: 1.2;
+        color: var(--accent-gold);
+        text-shadow: 0 8px 28px rgba(0,0,0,0.6);
+        margin-bottom: 30px;
+        max-width: 920px;
+      }
+      #outro-cta {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        color: #fff; padding: 22px 56px; border-radius: 70px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 44px; font-weight: 900;
+        letter-spacing: 2px;
+        box-shadow: 0 12px 36px rgba(var(--primary-rgb), 0.6);
+      }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- BACKGROUND SCENE (track 0, full) -->
+      <div id="bg-scene" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">
+        <img src="static/scene.png" alt="scene" />
+      </div>
+
+      <!-- BG OVERLAY (track 1, full) -->
+      <div id="bg-overlay" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1">
+        <div class="grain"></div>
+      </div>
+
+      {% if not demo_mode %}
+      <!-- BRAND ROW (track 2, hide during outro) -->
+      <div id="brand-row" class="clip" data-start="0" data-duration="{{ dialogue_total_end }}" data-track-index="2">
+        <div class="brand-logo">
+          {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span class="brand-emoji">{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span class="brand-name">{{ channel_name }}</span>
+      </div>
+      {% endif %}
+
+      <!-- TITLE TARGET TOP — small gold pill (track 3) -->
+      <div id="title-target-wrap" class="clip" data-start="0" data-duration="{{ dialogue_total_end }}" data-track-index="3">
+        <div id="title-target">{{ title_target }}</div>
+      </div>
+
+      <!-- TITLE NATIVE BOTTOM — BIG white UPPERCASE (track 4) -->
+      <div id="title-native" class="clip" data-start="0" data-duration="{{ dialogue_total_end }}" data-track-index="4">{{ title_native }}</div>
+
+      <!-- CHARACTER A (track 5, full dialogue duration) -->
+      <div id="char-a-wrap" class="char-wrap clip" data-start="0" data-duration="{{ dialogue_total_end }}" data-track-index="5">
+        <div class="char-portrait" id="char-a-portrait">
+          <img src="static/char_a.png" alt="char a" />
+        </div>
+        <div class="char-label">
+          <div class="char-name">{{ char_a_name }}</div>
+          <div class="char-role">{{ char_a_role }}</div>
+        </div>
+      </div>
+
+      <!-- CHARACTER B (track 6) -->
+      <div id="char-b-wrap" class="char-wrap clip" data-start="0" data-duration="{{ dialogue_total_end }}" data-track-index="6">
+        <div class="char-portrait" id="char-b-portrait">
+          <img src="static/char_b.png" alt="char b" />
+        </div>
+        <div class="char-label">
+          <div class="char-name">{{ char_b_name }}</div>
+          <div class="char-role">{{ char_b_role }}</div>
+        </div>
+      </div>
+
+      <!-- SUB BAR (track 7, full dialogue) -->
+      <div id="sub-bar" class="clip" data-start="0" data-duration="{{ dialogue_total_end }}" data-track-index="7">
+        <div id="sub-target"></div>
+        <div id="sub-pron"></div>
+        <div id="sub-vn"></div>
+      </div>
+
+      <!-- SPEECH BUBBLES — one per turn, on track 8, each non-overlapping in time -->
+      {% for t in turns %}
+      <div class="bubble {{ t.speaker|lower }} clip" id="bubble-{{ t.idx }}"
+           data-start="{{ t.start }}" data-duration="{{ t.slot }}" data-track-index="8">{{ t.target }}</div>
+      {% endfor %}
+
+      <!-- OUTRO CARD (track 9, after dialogue ends) -->
+      <div id="outro-card" class="clip" data-start="{{ outro.start }}" data-duration="{{ outro.slot }}" data-track-index="9">
+        <div id="outro-text">{{ outro_text }}</div>
+        <div id="outro-cta">💬 LIKE & FOLLOW</div>
+      </div>
+
+      <!-- ===== AUDIO ===== Track 10: voice (non-overlapping) -->
+      {% for t in turns %}
+      <audio id="audio-t-{{ t.idx }}" class="clip"
+             data-start="{{ t.voice_start }}" data-duration="{{ t.voice_duration }}"
+             data-track-index="10" data-volume="1.0"
+             src="assets/audio/t_{{ t.idx }}.wav"></audio>
+      {% endfor %}
+
+      <audio id="audio-outro-vi" class="clip"
+             data-start="{{ outro.voice_start }}" data-duration="{{ outro.voice_duration }}"
+             data-track-index="10" data-volume="1.0"
+             src="assets/audio/outro_vi.wav"></audio>
+
+    </div>
+
+    <script>
+      function autoFitByLength(rules) {
+        // BUG FIX: cumulative scaling — re-running this with new text would re-scale
+        // the ALREADY-reduced font, shrinking it every turn until invisible.
+        // Reset inline font-size FIRST so we measure the CSS-default base each time.
+        for (const rule of rules) {
+          document.querySelectorAll(rule.selector).forEach(el => {
+            el.style.fontSize = "";  // clear inline override → measure CSS default
+            const len = (el.textContent || "").trim().length;
+            const baseFs = parseFloat(getComputedStyle(el).fontSize);
+            let scale = 1;
+            for (const step of rule.scale_steps) {
+              if (len > step.above) scale = step.scale;
+            }
+            if (scale < 1) {
+              el.style.fontSize = (baseFs * scale).toFixed(0) + "px";
+            }
+          });
+        }
+      }
+      // Initial fit for fixed elements; sub bar gets fit per-turn
+      autoFitByLength([
+        // English content tends to be 20-50% longer than Vietnamese for the
+        // same meaning. Steps below cover both short VN ("Đặt món") and long
+        // EN ("Asking Where The Metro Is") inside the same fixed container.
+        { selector: "#title-native", scale_steps: [
+            { above: 18, scale: 0.92 },
+            { above: 24, scale: 0.82 },
+            { above: 30, scale: 0.72 },
+            { above: 38, scale: 0.62 },
+            { above: 46, scale: 0.52 },
+          ]},
+        { selector: "#title-target", scale_steps: [
+            { above: 12, scale: 0.92 },
+            { above: 16, scale: 0.80 },
+            { above: 20, scale: 0.68 },
+            { above: 26, scale: 0.56 },
+            { above: 32, scale: 0.46 },
+          ]},
+        { selector: ".bubble", scale_steps: [
+            { above: 30, scale: 0.85 },
+            { above: 45, scale: 0.70 },
+            { above: 65, scale: 0.55 },
+          ]},
+      ]);
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const TOTAL = {{ total_duration }};
+
+      // Brand subtle pulse
+      tl.to(".brand-logo", { scale: 1.06, duration: 1.5, repeat: Math.ceil(TOTAL / 3), yoyo: true, ease: "sine.inOut" }, 0);
+
+      // Initial intro: target lang gold pill pops, then big VN slides up.
+      // VN is the anchor — slight delay makes it land last for emphasis.
+      tl.from("#title-target", { scale: 0.7, opacity: 0, duration: 0.5, ease: "back.out(1.8)" }, 0);
+      tl.from("#title-native", { y: 40, opacity: 0, duration: 0.6, ease: "power3.out" }, 0.18);
+      tl.from("#char-a-wrap",  { y: 80, opacity: 0, duration: 0.6, ease: "back.out(1.5)" }, 0.35);
+      tl.from("#char-b-wrap",  { y: 80, opacity: 0, duration: 0.6, ease: "back.out(1.5)" }, 0.50);
+      tl.from("#sub-bar",      { y: 60, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.65);
+
+      // Char A idle bobbing (subtle yoyo)
+      tl.to("#char-a-portrait", { y: -8, duration: 1.4, repeat: Math.ceil(TOTAL / 2.8), yoyo: true, ease: "sine.inOut" }, 0.6);
+      tl.to("#char-b-portrait", { y: -8, duration: 1.4, repeat: Math.ceil(TOTAL / 2.8), yoyo: true, ease: "sine.inOut" }, 1.3);
+
+      // PER-TURN
+      {% for t in turns %}
+      {
+        const subTarget = "#sub-target";
+        const subPron   = "#sub-pron";
+        const subVn     = "#sub-vn";
+        const bubble    = "#bubble-{{ t.idx }}";
+        const activeChar  = "{{ t.speaker|lower }}" === "a" ? "#char-a-portrait" : "#char-b-portrait";
+        const dimChar     = "{{ t.speaker|lower }}" === "a" ? "#char-b-portrait" : "#char-a-portrait";
+
+        // Active speaker highlights + bubble pops
+        tl.call(() => {
+          document.querySelectorAll(".char-portrait").forEach(e => e.classList.remove("active"));
+          const el = document.querySelector(activeChar);
+          if (el) el.classList.add("active");
+        }, null, {{ t.start }});
+
+        tl.fromTo(bubble,
+          { opacity: 0, y: 30, scale: 0.85 },
+          { opacity: 1, y: 0, scale: 1.0, duration: 0.40, ease: "back.out(1.6)" },
+          {{ t.start }});
+        tl.to(bubble, { opacity: 0, y: -20, scale: 0.92, duration: 0.35, ease: "power2.in" }, {{ t.start }} + {{ t.slot }} - 0.40);
+
+        // Sub bar text swap (call to update textContent before fade in)
+        tl.call(() => {
+          const st = document.querySelector(subTarget);
+          const sp = document.querySelector(subPron);
+          const sv = document.querySelector(subVn);
+          if (st) st.textContent = {{ t.target|tojson }};
+          if (sp) sp.textContent = {{ t.pronunciation|tojson }};
+          if (sv) sv.textContent = {{ t.native|tojson }};
+          // Re-fit after content change
+          autoFitByLength([
+            { selector: "#sub-target", scale_steps: [
+                { above: 24, scale: 0.85 },
+                { above: 36, scale: 0.70 },
+                { above: 52, scale: 0.55 },
+              ]},
+          ]);
+        }, null, {{ t.start }} + 0.05);
+
+        // Subtle pulse on sub bar to draw eye
+        tl.to("#sub-bar", { scale: 1.02, duration: 0.30, ease: "power2.out" }, {{ t.start }} + 0.05);
+        tl.to("#sub-bar", { scale: 1.00, duration: 0.40, ease: "power2.inOut" }, {{ t.start }} + 0.40);
+      }
+      {% endfor %}
+
+      // Clear highlight at outro
+      tl.call(() => {
+        document.querySelectorAll(".char-portrait").forEach(e => e.classList.remove("active"));
+      }, null, {{ outro.start }});
+
+      // OUTRO
+      tl.set("#outro-card", { opacity: 0 }, {{ outro.start }});
+      tl.to("#outro-card",  { opacity: 1, duration: 0.4 }, {{ outro.start }});
+      tl.from("#outro-text", { y: -40, opacity: 0, duration: 0.6, ease: "power3.out" }, {{ outro.voice_start }} - 0.2);
+      tl.from("#outro-cta",  { scale: 0.7, opacity: 0, duration: 0.6, ease: "back.out(2)" }, {{ outro.voice_start }} + 0.2);
+      tl.to("#outro-cta", {
+        scale: 1.06,
+        duration: 0.55,
+        repeat: Math.max(2, Math.ceil(({{ outro.slot }} - 0.7) / 1.1)),
+        yoyo: true,
+        ease: "sine.inOut",
+      }, {{ outro.voice_start }} + 0.8);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

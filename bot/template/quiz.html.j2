@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary:        {{ theme.primary }};
+        --primary-light:  {{ theme.primary_light }};
+        --primary-soft:   {{ theme.primary_soft }};
+        --accent:         {{ theme.accent }};
+        --accent-gold:    {{ theme.accent_gold }};
+        --ipa-color:      {{ theme.ipa_color }};
+        --bg-grad:        {{ theme.bg_grad }};
+        --halo-1:         {{ theme.halo_1 }};
+        --halo-2:         {{ theme.halo_2 }};
+        --halo-3:         {{ theme.halo_3 }};
+        --primary-rgb:    {{ theme.primary_shadow_rgb }};
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: #0a0e27; font-family: "Inter", "Be Vietnam Pro", sans-serif;
+        color: #fff;
+      }
+      #bg {
+        position: absolute; inset: 0;
+        background:
+          radial-gradient(ellipse 700px 700px at 10% 10%, var(--halo-1), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 90% 90%, var(--halo-2), transparent 60%),
+          radial-gradient(ellipse 500px 500px at 50% 50%, var(--halo-3), transparent 60%),
+          var(--bg-grad);
+      }
+      /* AI scene mode: replace bg-grad with darkened scene image at bottom of stack. */
+      #bg.has-scene-bg {
+        background:
+          radial-gradient(ellipse 700px 700px at 10% 10%, var(--halo-1), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 90% 90%, var(--halo-2), transparent 60%),
+          radial-gradient(ellipse 500px 500px at 50% 50%, var(--halo-3), transparent 60%),
+          linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.65) 100%),
+          url("static/scene.png") center/cover no-repeat;
+      }
+      .grain {
+        position: absolute; inset: 0; opacity: 0.10; pointer-events: none;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      }
+      .vignette {
+        position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+      }
+      .clip { position: absolute; will-change: transform, opacity; }
+
+      /* HEADER (top, sticky) — y bumped 200→290, L/R 60→90 to clear
+         TikTok username overlay + Reels share rail. */
+      #quiz-header { top: 290px; left: 90px; right: 90px; text-align: center; }
+      #quiz-badge {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        color: #fff;
+        padding: 18px 56px;
+        border-radius: 60px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 42px; font-weight: 900;
+        letter-spacing: 4px; text-transform: uppercase;
+        box-shadow: 0 12px 36px rgba(var(--primary-rgb), 0.55);
+        margin-bottom: 28px;
+      }
+      #quiz-section-label {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 40px; font-weight: 800;
+        color: var(--primary-light);
+        letter-spacing: 1px; text-transform: uppercase;
+      }
+
+      /* QUESTION (middle-upper) — L/R 60→90 to respect rail clearance */
+      #quiz-question { top: 420px; left: 90px; right: 90px; text-align: center; }
+      #question-text {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 72px; font-weight: 900;
+        color: #fff; line-height: 1.22;
+        text-shadow: 0 6px 24px rgba(0,0,0,0.55);
+        margin-bottom: 18px;
+        padding: 0 10px;
+      }
+      #question-target {
+        font-family: "Inter", sans-serif;
+        font-size: 38px; font-weight: 500; font-style: italic;
+        color: var(--primary-light); line-height: 1.25;
+        opacity: 0.85;
+      }
+      /* 3-line stacked question — shared by forward (.forward-target) and
+         reverse (.reverse-target). Reads naturally top-to-bottom and is
+         eye-catching as a thumbnail.
+            line 1: lang context  — WHITE UPPERCASE  (e.g. "TRONG TIẾNG ĐỨC")
+            line 2: phrase being asked  — GOLD BIG  (VN for forward, target for reverse)
+            line 3: question closer  — WHITE UPPERCASE  ("LÀ GÌ?" / "NGHĨA LÀ GÌ?") */
+      #question-text.q3-stack {
+        font-family: "Be Vietnam Pro", "Inter", sans-serif;
+        line-height: 1.10;
+        padding: 0 8px;
+      }
+      .q3-stack .q-line-top,
+      .q3-stack .q-line-bot {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 68px; font-weight: 900;
+        color: #fff;
+        line-height: 1.14;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-shadow: 0 6px 22px rgba(0,0,0,0.6);
+        margin: 0;
+        padding: 0;
+      }
+      /* Margins bumped to 22px so the gold target border has clear breathing
+         room above + below — never touches the white wrapper lines. */
+      .q3-stack .q-line-top { margin-bottom: 22px; }
+      .q3-stack .q-line-bot { margin-top: 22px; }
+      .q3-stack .q-target {
+        /* System CJK fonts FIRST — Google CDN unreliable in HF Chromium */
+        font-family: "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR",
+                     "Be Vietnam Pro", sans-serif;
+        /* Same base size as the white wrapper lines — color + border are the
+           differentiators, not size. Coherent stack reads as one question. */
+        font-size: 68px; font-weight: 900;
+        background: linear-gradient(90deg, var(--accent-gold), var(--accent));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow: 0 8px 32px rgba(var(--primary-rgb), 0.4);
+        line-height: 1.14;
+        letter-spacing: -0.5px;
+        overflow-wrap: anywhere;
+        display: inline-block;
+        /* Thin gold border + subtle outer halo separate the target word from
+           the white wrapper lines, making it pop as the focal point. */
+        padding: 10px 28px;
+        border: 2px solid rgba(255, 215, 0, 0.55);
+        border-radius: 22px;
+        box-shadow: 0 0 28px rgba(255, 200, 0, 0.22);
+        transform-origin: center;
+        transition: text-shadow 0.3s ease,
+                    border-color 0.3s ease,
+                    box-shadow 0.3s ease;
+      }
+      /* Forward quiz: target line is a Vietnamese phrase — uppercase it to
+         match the surrounding "TRONG TIẾNG X" + "LÀ GÌ?" lines.
+         Reverse quiz: target is CJK / native target lang, leave as-is. */
+      .q3-stack.forward-target .q-target {
+        text-transform: uppercase;
+      }
+      /* Voice-active state — only used by reverse quiz (target voice plays) */
+      .q3-stack .q-target.is-voicing {
+        border-color: rgba(255, 215, 0, 0.95);
+        box-shadow: 0 0 48px rgba(255, 200, 0, 0.45);
+        text-shadow:
+          0 0 32px rgba(255, 215, 0, 0.8),
+          0 0 64px rgba(255, 215, 0, 0.5),
+          0 8px 32px rgba(var(--primary-rgb), 0.55);
+      }
+
+      /* 2x2 OPTIONS GRID — L/R 60→90 for rail clearance */
+      #options-grid {
+        top: 820px; left: 90px; right: 90px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-gap: 30px;
+      }
+      .option-box {
+        display: flex; align-items: center; gap: 22px;
+        padding: 26px 28px;
+        min-height: 180px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 3px solid rgba(255, 255, 255, 0.18);
+        border-radius: 32px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.40);
+      }
+      /* Active state — applied when voice reads this option */
+      .option-box.is-active {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: var(--accent-gold);
+        box-shadow: 0 12px 40px rgba(var(--primary-rgb), 0.65);
+      }
+      .opt-circle {
+        width: 100px; height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, rgba(255,255,255,0.20), rgba(255,255,255,0.05));
+        border: 4px solid rgba(255, 255, 255, 0.55);
+        display: flex; align-items: center; justify-content: center;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 64px; font-weight: 900;
+        color: #fff;
+        flex-shrink: 0;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+      }
+      .option-box.is-active .opt-circle {
+        background: linear-gradient(135deg, var(--accent-gold), var(--accent));
+        border-color: #fff;
+        box-shadow: 0 10px 30px rgba(var(--primary-rgb), 1);
+      }
+      .opt-text-wrap {
+        flex: 1; min-width: 0;
+      }
+      .opt-text {
+        /* System CJK fonts FIRST (installed via dnf) — Google CDN unreliable in HF Chromium */
+        font-family: "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR",
+                     "Be Vietnam Pro", sans-serif;
+        font-size: 44px; font-weight: 800;
+        color: #fff;
+        line-height: 1.1;
+        word-wrap: break-word; overflow-wrap: anywhere;
+      }
+      .opt-pron {
+        font-family: "Inter", sans-serif;
+        font-size: 26px; font-weight: 400; font-style: italic;
+        color: var(--primary-light);
+        line-height: 1.2;
+        margin-top: 6px;
+      }
+
+      /* CTA (bottom) — L/R 60→90 for rail clearance. bottom:540 means
+         y = 1920-540 = 1380, which sits inside content area (660-1570). OK. */
+      #quiz-cta { bottom: 540px; left: 90px; right: 90px; text-align: center; }
+      #cta-text {
+        display: inline-block;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        color: #fff;
+        padding: 22px 56px;
+        border-radius: 70px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 44px; font-weight: 900;
+        text-transform: uppercase; letter-spacing: 2px;
+        box-shadow: 0 16px 48px rgba(var(--primary-rgb), 0.55);
+      }
+
+      /* Brand row */
+      #brand-row {
+        position: absolute; bottom: 420px; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
+        gap: 22px; padding: 0 60px;
+      }
+      .brand-logo {
+        width: 80px; height: 80px; border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+      }
+      .brand-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .brand-logo .brand-emoji {
+        font-size: 46px; line-height: 1;
+        font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+      }
+      .brand-name {
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 50px; font-weight: 800; color: #fff;
+        text-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+        letter-spacing: -0.5px; white-space: nowrap;
+      }
+      #tagline {
+        position: absolute; bottom: 340px; left: 0; right: 0;
+        text-align: center; padding: 0 60px;
+        font-family: "Inter", sans-serif;
+        font-size: 30px; font-weight: 500;
+        color: var(--primary-light); opacity: 0.85; letter-spacing: 0.5px;
+      }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- BACKGROUND -->
+      <div id="bg" class="clip{% if has_scene %} has-scene-bg{% endif %}" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">
+        <div class="grain"></div>
+        <div class="vignette"></div>
+      </div>
+
+      <!-- VISIBLE ELEMENTS — all sticky, animated via GSAP timeline -->
+
+      <!-- Quiz header (badge "🎯 QUIZ" + section "Tiếng X") removed:
+           lives in 4:5 crop zone on FB feed mobile; redundant with question.
+           Outer div kept (empty) to preserve track-index 1 for downstream layouts. -->
+      <div id="quiz-header" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1">
+    </div>
+
+    <div id="quiz-question" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="2">
+      {% if is_reverse %}
+      {# Reverse: target phrase shown, native question heard. Natively phrased. #}
+      <div id="question-text" class="q3-stack reverse-target">
+        <div class="q-line-top">{% if native_lang == "en" %}What does{% else %}Trong tiếng Việt{% endif %}</div>
+        <div class="q-target">{{ question_target }}</div>
+        <div class="q-line-bot">{% if native_lang == "en" %}mean?{% else %}nghĩa là gì?{% endif %}</div>
+      </div>
+      {% else %}
+      {# Forward: 3-line stacked. Idiomatic native phrasing per language. #}
+      <div id="question-text" class="q3-stack forward-target">
+        <div class="q-line-top">{% if native_lang == "en" %}How do you say{% else %}Trong tiếng {{ target_lang_name }}{% endif %}</div>
+        <div class="q-target">{{ short_title }}</div>
+        <div class="q-line-bot">{% if native_lang == "en" %}in {{ target_lang_name }}?{% else %}là gì?{% endif %}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div id="options-grid" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="3">
+      {% for opt in options %}
+      <div class="option-box opt-{{ opt.label|lower }}" id="opt-{{ opt.label }}">
+        <div class="opt-circle">{{ opt.label }}</div>
+        <div class="opt-text-wrap">
+          <div class="opt-text">{{ opt.text }}</div>
+          {% if opt.pronunciation %}<div class="opt-pron">{{ opt.pronunciation }}</div>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div id="quiz-cta" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="4">
+      <div id="cta-text">{% if native_lang == "en" %}💬 Drop your answer below{% else %}💬 Comment đáp án{% endif %}</div>
+    </div>
+
+    {% if not demo_mode %}
+    {# HyperFrames requires unique track per clip on same time-range — each full-span visual gets own track #}
+    <div id="brand-row" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="6">
+      <div class="brand-logo">
+        {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span class="brand-emoji">{{ avatar_emoji }}</span>{% endif %}
+      </div>
+      <span class="brand-name">{{ channel_name }}</span>
+    </div>
+    <div id="tagline" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7">{{ channel_tagline }}</div>
+    {% endif %}
+
+    <!-- ===== AUDIO ===== (HF reads src= attribute directly) -->
+
+    <audio id="audio-intro-vi" class="clip" data-start="{{ intro.voice_start }}" data-duration="{{ intro.voice_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/intro_vi.wav"></audio>
+
+    {% if is_reverse and intro_target %}
+    {# Reverse quiz: target voice reads question_target right after VN narrator #}
+    <audio id="audio-intro-target" class="clip" data-start="{{ intro_target.voice_start }}" data-duration="{{ intro_target.voice_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/intro_target.wav"></audio>
+    {% endif %}
+
+    {% for opt in options %}
+    {% if has_chime %}
+    {# Chime audio: separate track from visual clips. Each chime is 0.5s at different time → no overlap with each other #}
+    <audio id="chime-{{ opt.label }}" class="clip" data-start="{{ opt.chime_start }}" data-duration="0.5" data-track-index="8" data-volume="0.85" src="static/chime.mp3"></audio>
+    {% endif %}
+    <audio id="audio-opt-{{ opt.label }}-label" class="clip" data-start="{{ opt.label_audio_start }}" data-duration="{{ opt.label_audio_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/opt_{{ opt.label }}_label.wav"></audio>
+    <audio id="audio-opt-{{ opt.label }}-text"  class="clip" data-start="{{ opt.target_audio_start }}" data-duration="{{ opt.target_audio_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/opt_{{ opt.label }}.wav"></audio>
+    {% endfor %}
+
+    <audio id="audio-outro-vi" class="clip" data-start="{{ outro.voice_start }}" data-duration="{{ outro.voice_duration }}" data-track-index="5" data-volume="1.0" src="assets/audio/outro_vi.wav"></audio>
+    </div>
+    <!-- /#root -->
+
+    <script>
+      // ─── Auto-fit text by length ───
+      function autoFitByLength(rules) {
+        for (const rule of rules) {
+          document.querySelectorAll(rule.selector).forEach(el => {
+            const len = (el.textContent || "").trim().length;
+            const baseFs = parseFloat(getComputedStyle(el).fontSize);
+            let scale = 1;
+            for (const step of rule.scale_steps) {
+              if (len > step.above) scale = step.scale;
+            }
+            if (scale < 1) {
+              el.style.fontSize = (baseFs * scale).toFixed(0) + "px";
+            }
+          });
+        }
+      }
+      autoFitByLength([
+        // 3-line stack: scale the .q-target line ONLY (line 1+3 are fixed short phrases).
+        // Applies to BOTH forward (.forward-target .q-target = VN phrase like 'Tôi bị ốm')
+        // and reverse (.reverse-target .q-target = target-lang word like '안녕하세요').
+        { selector: ".q3-stack .q-target", scale_steps: [
+            { above: 8,  scale: 0.92 },
+            { above: 14, scale: 0.78 },
+            { above: 20, scale: 0.65 },
+            { above: 28, scale: 0.54 },
+          ]},
+        // Top/bottom wrapper lines: scale when an English variant is longer than
+        // the VN fallback ("Trong tiếng Russian" = 19 chars vs "How do you say" = 14;
+        // "in Russian?" = 11 vs "là gì?" = 6; "Trong tiếng Việt" / "nghĩa là gì?"
+        // baseline). Keeps single line on the 9:16 safe zone.
+        { selector: ".q3-stack .q-line-top", scale_steps: [
+            { above: 16, scale: 0.88 },
+            { above: 22, scale: 0.76 },
+            { above: 28, scale: 0.66 },
+          ]},
+        { selector: ".q3-stack .q-line-bot", scale_steps: [
+            { above: 14, scale: 0.88 },
+            { above: 20, scale: 0.74 },
+            { above: 26, scale: 0.62 },
+          ]},
+        { selector: ".opt-text", scale_steps: [
+            { above: 14, scale: 0.88 },
+            { above: 18, scale: 0.75 },
+            { above: 24, scale: 0.60 },
+            { above: 32, scale: 0.48 },
+          ]},
+        { selector: ".opt-pron", scale_steps: [
+            { above: 16, scale: 0.85 },
+            { above: 22, scale: 0.70 },
+          ]},
+      ]);
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const TOTAL = {{ total_duration }};
+
+      // Brand subtle breathing throughout
+      tl.to(".brand-logo", { scale: 1.06, duration: 1.5, repeat: Math.ceil(TOTAL / 3), yoyo: true, ease: "sine.inOut" }, 0);
+
+      // INTRO: question 3-line fade in (during intro_vi voice).
+      // quiz-badge + quiz-section-label removed (4:5 crop zone).
+      // Both modes use same q3-stack; #question-target subtitle removed entirely.
+      tl.from("#question-text .q-line-top", { y: -40, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.40);
+      tl.from("#question-text .q-target",   { y:  40, scale: 0.85, opacity: 0, duration: 0.65, ease: "back.out(1.8)" }, 0.65);
+      tl.from("#question-text .q-line-bot", { y:  40, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.95);
+
+      {% if is_reverse and intro_target %}
+      // Reverse: spotlight ONLY the target word (not the whole wrapper) when
+      // target voice reads it. Class toggle drives gold glow; GSAP drives scale.
+      tl.add(() => document.querySelector(".reverse-target .q-target")?.classList.add("is-voicing"),
+             {{ intro_target.voice_start }});
+      tl.to(".reverse-target .q-target", { scale: 1.10, duration: 0.45, ease: "power2.out" }, {{ intro_target.voice_start }});
+      tl.to(".reverse-target .q-target", { scale: 1.00, duration: 0.40, ease: "power2.inOut" }, {{ intro_target.voice_start }} + {{ intro_target.voice_duration }} - 0.2);
+      tl.add(() => document.querySelector(".reverse-target .q-target")?.classList.remove("is-voicing"),
+             {{ intro_target.voice_start }} + {{ intro_target.voice_duration }} + 0.15);
+      {% endif %}
+
+      // 4 options visible immediately. Only CTA hidden until outro.
+      tl.set("#quiz-cta", { opacity: 0, y: 30 }, 0);
+
+      // When voice reads option X → add .is-active (CSS color change) + pulse scale
+      {% for opt in options %}
+      {
+        const sel = "#opt-{{ opt.label }}";
+        // Activate (gold border + glow + colored circle) at highlight_start
+        tl.call(() => document.querySelector(sel).classList.add("is-active"), null, {{ opt.highlight_start }});
+        // Subtle pulse during voice
+        tl.to(sel, { scale: 1.04, duration: 0.3, ease: "power2.out" }, {{ opt.target_audio_start }});
+        tl.to(sel, { scale: 1.0, duration: 0.4, ease: "power2.inOut" }, {{ opt.target_audio_start }} + 0.5);
+        // Deactivate at highlight_end (back to neutral so next option pops)
+        tl.call(() => document.querySelector(sel).classList.remove("is-active"), null, {{ opt.highlight_end }});
+      }
+      {% endfor %}
+
+      // CTA reveal at outro voice
+      tl.to("#quiz-cta", { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, {{ outro.voice_start }} - 0.2);
+      tl.to("#cta-text", {
+        scale: 1.08,
+        duration: 0.55,
+        repeat: Math.max(2, Math.ceil(({{ outro.slot }} - 0.5) / 1.1)),
+        yoyo: true,
+        ease: "sine.inOut",
+      }, {{ outro.voice_start }} + 0.3);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

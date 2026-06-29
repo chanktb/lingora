@@ -1,0 +1,58 @@
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+bot/.venv/
+.venv/
+
+# ── Secrets & runtime (NEVER commit) ────────────────────────────
+.env
+bot/.env
+bot/jobs/
+# Hide ALL real channels (secrets + config). Ship only the template below.
+channels/*
+!channels/.gitkeep
+# Root template IS published:
+!.env.example
+
+# ── Render output ───────────────────────────────────────────────
+*.mp4
+*.mov
+*.tmp
+
+# ── Internal docs (PRIVATE — never publish) ─────────────────────
+INTERNAL.md
+CONSOLIDATION.md
+STATE.md
+DECISIONS.md
+BRIEF.md
+CLAUDE_CONTEXT.md
+SESSIONS/
+*.bak
+*.bak-*
+
+# ── Deploy / tooling (PRIVATE — VPS-only, never publish) ────────
+ktb-lingora.tar.gz
+tools/
+bot/deploy/
+.tar-exclude
+
+# ── Production-only bot files (PRIVATE — opensource ships CLI only) ──
+bot/main.py
+bot/tiktok_poster.py
+bot/check_state.py
+bot/cleanup_jobs.py
+bot/demo.py
+bot/requirements.txt
+
+# ── Internal devlogs / old VPS-focused setup ────────────────────
+AUDIO_DRIFT_FIX_*.md
+SETUP.md
+
+# ── Editor ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
