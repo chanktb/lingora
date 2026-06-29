@@ -1,16 +1,15 @@
 """Lingora — local CLI to render one language-learning video.
 
 Usage:
-    python run.py                          # interactive wizard
+    python run.py                          # interactive wizard (recommended)
     python run.py --layout phrases --lang de --topic "ordering coffee"
-    python run.py --layout dialogue --lang ja --topic "asking directions"
 
 Output:
-    channels/<channel-name>/jobs/<auto-...>/output.mp4
+    channels/<channel>/jobs/<auto-…>/output.mp4
 
-The channel folder is just a config holder (one .env per "video config").
-The repo ships one starter channel template; create more by copying
-.env.example to channels/<your-name>/.env.
+The wizard auto-skips any question whose value is already set in the
+channel's .env file (e.g. if DEFAULT_TARGET_LANG=de is set, it won't
+ask which language).
 """
 from __future__ import annotations
 
@@ -21,88 +20,180 @@ import shutil
 import sys
 from pathlib import Path
 
-LAYOUTS = [
-    "phrases", "quiz", "quiz_reverse",
-    "whats_this", "whats_board", "dialogue",
-    "fill_blank", "vocab_table", "compare",
-    "guess_word",
-]
-
-LANG_PRESETS = {
-    "de": ("German",   "Đức"),
-    "ru": ("Russian",  "Nga"),
-    "zh": ("Chinese",  "Trung"),
-    "ja": ("Japanese", "Nhật"),
-    "ko": ("Korean",   "Hàn"),
-    "en": ("English",  "Anh"),
-    "fr": ("French",   "Pháp"),
-    "es": ("Spanish",  "Tây Ban Nha"),
-    "vi": ("Vietnamese", "Việt"),
-}
-
 HERE = Path(__file__).resolve().parent
 
+# ── Catalog ──────────────────────────────────────────────────────────
+LAYOUTS = [
+    ("phrases",       "Phrases — 8-10 short sentences with voiceover"),
+    ("quiz",          "Quiz — one phrase, three options, reveal answer"),
+    ("dialogue",      "Dialogue — 6-8 turn mini-skit between 2 characters"),
+    ("whats_this",    "What's this — 10 vocab items with AI illustration"),
+    ("whats_board",   "What's on the board — 9-grid cheat sheet"),
+    ("vocab_table",   "Vocab table — 8 items + character mascot (static poster)"),
+    ("compare",       "Compare — 8 pairs side-by-side (static poster)"),
+    ("fill_blank",    "Fill-blank — one sentence with a missing word + 3 options"),
+    ("guess_word",    "Guess-word — reveal target word letter by letter"),
+    ("quiz_reverse",  "Reverse quiz — guess the meaning of a phrase"),
+]
 
-def _ask(prompt: str, default: str = "") -> str:
+LANGS = [
+    ("de", "German",     "Đức"),
+    ("ru", "Russian",    "Nga"),
+    ("zh", "Chinese",    "Trung"),
+    ("ja", "Japanese",   "Nhật"),
+    ("ko", "Korean",     "Hàn"),
+    ("en", "English",    "Anh"),
+    ("fr", "French",     "Pháp"),
+    ("es", "Spanish",    "Tây Ban Nha"),
+    ("vi", "Vietnamese", "Việt"),
+]
+LANG_VI = {code: vi for code, _, vi in LANGS}
+
+VOICES = [
+    ("any",    "Any (let the engine pick)"),
+    ("female", "Female"),
+    ("male",   "Male"),
+]
+
+
+# ── Helpers ──────────────────────────────────────────────────────────
+def _read_env(env_path: Path) -> dict[str, str]:
+    """Minimal .env parser — no quoting, no expansion. Enough to check keys."""
+    out: dict[str, str] = {}
+    if not env_path.exists():
+        return out
+    for raw in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        out[key.strip()] = val.strip().strip('"').strip("'")
+    return out
+
+
+def _menu(prompt: str, items: list[tuple[str, str]], *, default_idx: int = 0) -> str:
+    """Show numbered menu. items = [(key, label), ...]. Returns chosen key."""
+    print(f"\n{prompt}")
+    for i, (_, label) in enumerate(items, 1):
+        marker = "  ← default" if i - 1 == default_idx else ""
+        print(f"  {i:2}. {label}{marker}")
+    while True:
+        raw = input(f"Choice [1-{len(items)}, Enter = {default_idx + 1}]: ").strip()
+        if not raw:
+            return items[default_idx][0]
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(items):
+                return items[idx][0]
+        except ValueError:
+            pass
+        print(f"  → please enter a number between 1 and {len(items)}")
+
+
+def _ask_text(prompt: str, *, default: str = "", allow_empty: bool = False) -> str:
     suffix = f" [{default}]" if default else ""
-    val = input(f"{prompt}{suffix}: ").strip()
-    return val or default
+    while True:
+        val = input(f"{prompt}{suffix}: ").strip()
+        if val:
+            return val
+        if default:
+            return default
+        if allow_empty:
+            return ""
+        print("  → please type something")
 
 
-def _wizard() -> argparse.Namespace:
-    print("\n=== Lingora — interactive wizard ===\n")
+def _confirm(prompt: str, *, default_yes: bool = True) -> bool:
+    suffix = "[Y/n]" if default_yes else "[y/N]"
+    raw = input(f"{prompt} {suffix}: ").strip().lower()
+    if not raw:
+        return default_yes
+    return raw.startswith("y")
 
-    # Channel
-    channels_dir = HERE / "channels"
-    existing = sorted([p.name for p in channels_dir.iterdir() if p.is_dir() and (p / ".env").exists()]) if channels_dir.exists() else []
-    if existing:
-        print(f"Existing channels: {', '.join(existing)}")
-        channel = _ask("Channel name", existing[0])
-    else:
-        print("No channel found. We'll create one for you.")
-        channel = _ask("Channel name", "myvideo")
-    ch_dir = channels_dir / channel
-    env_file = ch_dir / ".env"
-    if not env_file.exists():
-        ch_dir.mkdir(parents=True, exist_ok=True)
-        example = HERE / ".env.example"
-        if example.exists():
-            shutil.copy2(example, env_file)
+
+# ── Channel discovery & setup ────────────────────────────────────────
+def _pick_channel(channels_dir: Path) -> Path:
+    """Pick or create a channel folder. Exits if .env needs to be filled in."""
+    existing = sorted(
+        [p for p in channels_dir.iterdir() if p.is_dir() and (p / ".env").exists()]
+    ) if channels_dir.exists() else []
+
+    if len(existing) == 0:
+        # First-time setup: scaffold channels/myvideo/.env from template
+        ch = channels_dir / "myvideo"
+        ch.mkdir(parents=True, exist_ok=True)
+        template = HERE / ".env.example"
+        env_file = ch / ".env"
+        if template.exists():
+            shutil.copy2(template, env_file)
             print(f"\n  Created {env_file}")
-            print(f"  → Open it and paste your GEMINI_API_KEYS, then re-run.\n")
+            print(f"  → Open it, paste your GEMINI_API_KEYS, then re-run.")
+            print(f"  → Free key: https://aistudio.google.com/apikey")
         else:
             print(f"\n  ERROR: .env.example missing at repo root.")
         sys.exit(1)
 
-    # Layout
-    print(f"\nLayouts: {', '.join(LAYOUTS)}")
-    layout = _ask("Layout", "phrases")
-    if layout not in LAYOUTS:
-        sys.exit(f"Unknown layout: {layout}")
+    if len(existing) == 1:
+        return existing[0]
 
-    # Language
-    print(f"\nLanguages: {', '.join(f'{k}={v[0]}' for k, v in LANG_PRESETS.items())}")
-    lang = _ask("Target language code", "de")
-    if lang not in LANG_PRESETS:
-        print(f"  (unknown code {lang} — passing through, hope your model knows it)")
+    items = [(p.name, p.name) for p in existing]
+    chosen = _menu("Pick a channel:", items, default_idx=0)
+    return channels_dir / chosen
 
-    # Topic
-    topic = _ask("Topic (e.g. 'ordering coffee')", "ordering coffee")
 
-    # Voice
-    voice = _ask("Voice (any/female/male)", "any")
-    if voice not in ("any", "female", "male"):
-        voice = "any"
+def _wizard() -> argparse.Namespace:
+    print("\n=== Lingora — interactive wizard ===")
+
+    channel_dir = _pick_channel(HERE / "channels")
+    env = _read_env(channel_dir / ".env")
+
+    # Layout: always ask (changes per video)
+    layout = _menu("Pick a video layout:", LAYOUTS, default_idx=0)
+
+    # Language: skip if .env has DEFAULT_TARGET_LANG
+    lang = env.get("DEFAULT_TARGET_LANG", "").strip()
+    if lang:
+        print(f"\nLanguage: {lang} (from .env DEFAULT_TARGET_LANG — skipping prompt)")
+    else:
+        lang = _menu(
+            "Pick the language to teach:",
+            [(code, f"{name} ({code})") for code, name, _ in LANGS],
+            default_idx=0,
+        )
+
+    # Voice: skip if .env has DEFAULT_VOICE_GENDER
+    voice = env.get("DEFAULT_VOICE_GENDER", "").strip().lower()
+    if voice in {"any", "female", "male"}:
+        print(f"Voice: {voice} (from .env DEFAULT_VOICE_GENDER — skipping prompt)")
+    else:
+        voice = _menu("Pick a voice:", VOICES, default_idx=0)
+
+    # Topic: always ask, free-text
+    print()
+    topic = _ask_text("Topic (e.g. 'ordering coffee', 'kitchen items')")
+
+    # Summary + confirm
+    print("\n─── Summary ───")
+    print(f"  channel : {channel_dir.name}")
+    print(f"  layout  : {layout}")
+    print(f"  lang    : {lang}")
+    print(f"  voice   : {voice}")
+    print(f"  topic   : {topic}")
+    if not _confirm("\nRender now?"):
+        sys.exit("Cancelled.")
 
     return argparse.Namespace(
-        channel=channel, layout=layout, lang=lang, topic=topic, voice=voice, count=10,
+        channel=channel_dir.name,
+        layout=layout, lang=lang, topic=topic, voice=voice, count=10,
     )
 
 
+# ── CLI (non-interactive) ────────────────────────────────────────────
 def _parse_cli() -> argparse.Namespace:
+    layout_keys = [k for k, _ in LAYOUTS]
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--channel", default="myvideo", help="Channel folder under channels/ (holds .env)")
-    p.add_argument("--layout", choices=LAYOUTS, help="Video layout")
+    p.add_argument("--channel", default="myvideo", help="Channel folder under channels/")
+    p.add_argument("--layout", choices=layout_keys, help="Video layout")
     p.add_argument("--lang", help="Target language code (de, ru, ja, ko, zh, en, fr, es, vi, ...)")
     p.add_argument("--topic", help='Topic, e.g. "ordering coffee"')
     p.add_argument("--count", type=int, default=10)
@@ -114,15 +205,15 @@ def _parse_cli() -> argparse.Namespace:
     return args
 
 
+# ── Request builder ──────────────────────────────────────────────────
 def _build_request(args: argparse.Namespace) -> str:
-    """Build the natural-language request that the generator parses.
+    """Build the natural-language request the generator parses.
 
     Requests are written in Vietnamese because that's what topic_picker
-    emits in production, and the prompts/examples in the generator are
-    tuned for vi-native requests. The target language stays whatever you
-    asked for via --lang.
+    emits in production and the generator's examples are tuned for it.
+    The target language is whatever --lang says.
     """
-    lang_vi = LANG_PRESETS.get(args.lang, (args.lang.upper(), args.lang.upper()))[1]
+    lang_vi = LANG_VI.get(args.lang, args.lang.upper())
     voice_clause = f", giọng {args.voice}" if args.voice != "any" else ""
 
     if args.layout == "phrases":
@@ -160,6 +251,7 @@ def _build_request(args: argparse.Namespace) -> str:
     sys.exit(f"Unsupported layout: {args.layout}")
 
 
+# ── Main ─────────────────────────────────────────────────────────────
 def main() -> int:
     args = _parse_cli()
 
@@ -174,10 +266,10 @@ def main() -> int:
 
     request = _build_request(args)
 
-    # Env handoff to the engine (auto_post reads CHANNEL_DIR + .env)
+    # Hand off to the engine (auto_post reads CHANNEL_DIR + .env)
     os.environ["CHANNEL_DIR"] = str(channel_dir)
     os.environ["AUTO_POST_ENABLED"] = "true"
-    os.environ["DEMO_MODE"] = "1"              # skip FB upload + Telegram notify
+    os.environ["DEMO_MODE"] = "1"               # skip FB upload + Telegram notify
     os.environ["_DEMO_LAYOUT"] = args.layout
     os.environ["_DEMO_REQUEST"] = request
     os.environ["DEFAULT_TARGET_LANG"] = args.lang
@@ -185,7 +277,6 @@ def main() -> int:
     os.environ.pop("TELEGRAM_BOT_TOKEN", None)
     os.environ.pop("TELEGRAM_NOTIFY_BOT_TOKEN", None)
 
-    # Import engine — must happen after env is set
     bot_dir = HERE / "bot"
     sys.path.insert(0, str(bot_dir))
     import auto_post  # noqa: E402
@@ -198,7 +289,6 @@ def main() -> int:
     if rc != 0:
         return rc
 
-    # Surface the rendered MP4 path (DEMO_MODE writes a marker)
     jobs = channel_dir / "jobs"
     markers = sorted(jobs.glob("*/DEMO_OUTPUT.txt"), key=lambda p: p.stat().st_mtime, reverse=True) if jobs.exists() else []
     if markers:
@@ -208,7 +298,6 @@ def main() -> int:
             print(f"\n[lingora] ✓ rendered: {mp4} ({size_mb:.1f} MB)")
             return 0
 
-    # Fallback: find the newest output.mp4 under jobs/
     mp4s = sorted(jobs.glob("*/output.mp4"), key=lambda p: p.stat().st_mtime, reverse=True) if jobs.exists() else []
     if mp4s:
         print(f"\n[lingora] ✓ rendered: {mp4s[0]}")
