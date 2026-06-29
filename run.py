@@ -8,10 +8,14 @@ Output:
     channels/<channel>/jobs/<auto-…>/output.mp4
 
 Wizard behaviour:
-    - First run with no channel → interactive setup creates one for you
+    - First run: uses channels/example/ (shipped with the repo) and asks
+      for your free Gemini API key the first time only — it's written
+      back into the channel .env so next runs go straight to the layout
+      picker.
     - Skips any question whose value is already set in the channel's .env
-    - Topic step offers: type your own, or auto-generate (channel-aware,
-      avoids the last 100 topics already used)
+      (target language, native language, voice).
+    - Topic step defaults to auto-generate (channel-niche aware, avoids
+      the last 100 topics already used). Just type a topic to override.
 """
 from __future__ import annotations
 
@@ -50,8 +54,8 @@ LANGS = [
     ("es", "Spanish"),
     ("vi", "Vietnamese"),
 ]
-LANG_NAME = {code: name for code, name in LANGS}
-LANG_VI = {
+LANG_NAME_EN = {code: name for code, name in LANGS}
+LANG_NAME_VI = {
     "de": "Đức", "ru": "Nga", "zh": "Trung", "ja": "Nhật", "ko": "Hàn",
     "en": "Anh", "fr": "Pháp", "es": "Tây Ban Nha", "vi": "Việt",
 }
@@ -118,49 +122,50 @@ def _read_env(env_path: Path) -> dict[str, str]:
 
 
 def _apply_env_to_os(env: dict[str, str]) -> None:
-    """Push channel .env values into os.environ so the engine can read them.
-
-    Use setdefault so explicit env (CLI/PowerShell) still wins.
-    """
+    """Push channel .env values into os.environ so the engine can read them."""
     for k, v in env.items():
         if v and k not in os.environ:
             os.environ[k] = v
 
 
+def _patch_env_file(env_path: Path, updates: dict[str, str]) -> None:
+    """Rewrite specific KEY= lines in an existing .env, preserving comments + order."""
+    lines = env_path.read_text(encoding="utf-8", errors="replace").splitlines() if env_path.exists() else []
+    remaining = dict(updates)
+    out: list[str] = []
+    for raw in lines:
+        stripped = raw.strip()
+        if (not stripped) or stripped.startswith("#") or "=" not in stripped:
+            out.append(raw); continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in remaining:
+            out.append(f"{key}={remaining.pop(key)}")
+        else:
+            out.append(raw)
+    if remaining:
+        out.append("")
+        out.append("# ── added by wizard ──")
+        for k, v in remaining.items():
+            out.append(f"{k}={v}")
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
 def _write_env_from_template(target: Path, overrides: dict[str, str]) -> None:
-    """Copy .env.example to target, replacing KEY= lines with overrides."""
+    """Copy .env.example to target then patch overrides."""
     template = HERE / ".env.example"
     if not template.exists():
         sys.exit("ERROR: .env.example missing at repo root.")
     target.parent.mkdir(parents=True, exist_ok=True)
-    lines_out: list[str] = []
-    seen: set[str] = set()
-    for raw in template.read_text(encoding="utf-8", errors="replace").splitlines():
-        stripped = raw.strip()
-        if (not stripped) or stripped.startswith("#") or "=" not in stripped:
-            lines_out.append(raw); continue
-        key = stripped.split("=", 1)[0].strip()
-        if key in overrides:
-            lines_out.append(f"{key}={overrides[key]}")
-            seen.add(key)
-        else:
-            lines_out.append(raw)
-    # Append any overrides not present in template (rare)
-    extras = [k for k in overrides if k not in seen]
-    if extras:
-        lines_out.append("")
-        lines_out.append("# ── added by wizard ──")
-        for k in extras:
-            lines_out.append(f"{k}={overrides[k]}")
-    target.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
+    shutil.copy2(template, target)
+    _patch_env_file(target, overrides)
 
 
 # ── Channel: pick existing or create new ─────────────────────────────
 def _create_channel_wizard(channels_dir: Path) -> Path:
-    print("\n=== Lingora — create your first channel ===")
+    print("\n=== Create a new channel ===")
     print(
         "A 'channel' is just a config folder — one .env per video config.\n"
-        "You can add more later by re-running this wizard or copying the folder.\n"
     )
 
     name = _ask_text("Channel folder name", default="myvideo")
@@ -191,7 +196,7 @@ def _create_channel_wizard(channels_dir: Path) -> Path:
     key = _ask_text("Paste GEMINI_API_KEY here")
 
     print("\nOptional: Cloudflare Workers AI for scene/character images.")
-    print("  Format: account_id:api_token  (multiple accounts: id1:tok1,id2:tok2)")
+    print("  Format: account_id:api_token  (multiple: id1:tok1,id2:tok2)")
     cf = _ask_text("Paste CLOUDFLARE_ACCOUNTS (Enter to skip)", allow_empty=True)
 
     overrides = {
@@ -201,7 +206,7 @@ def _create_channel_wizard(channels_dir: Path) -> Path:
         "DEFAULT_NATIVE_LANG": native,
         "DEFAULT_VOICE_GENDER": voice,
         "GEMINI_API_KEY": key,
-        "GEMINI_API_KEYS": key,  # single-key user — auto_post falls back fine
+        "GEMINI_API_KEYS": key,
     }
     if cf:
         overrides["CLOUDFLARE_ACCOUNTS"] = cf
@@ -223,6 +228,7 @@ def _pick_or_create_channel(channels_dir: Path) -> Path:
     ) if channels_dir.exists() else []
 
     if not existing:
+        # No channel at all (user deleted the shipped example)
         return _create_channel_wizard(channels_dir)
 
     if len(existing) == 1:
@@ -233,6 +239,20 @@ def _pick_or_create_channel(channels_dir: Path) -> Path:
     if chosen == "__new__":
         return _create_channel_wizard(channels_dir)
     return channels_dir / chosen
+
+
+def _ensure_api_key(channel_dir: Path, env: dict[str, str]) -> dict[str, str]:
+    """If the channel .env has no Gemini key, prompt for one and write it back."""
+    if env.get("GEMINI_API_KEY") or env.get("GEMINI_API_KEYS"):
+        return env
+    print(
+        f"\nChannel '{channel_dir.name}' has no GEMINI_API_KEY yet.\n"
+        f"  Get a free one (takes ~30 sec): https://aistudio.google.com/apikey"
+    )
+    key = _ask_text("Paste GEMINI_API_KEY here")
+    _patch_env_file(channel_dir / ".env", {"GEMINI_API_KEY": key, "GEMINI_API_KEYS": key})
+    print(f"  ✓ Saved to {channel_dir / '.env'}")
+    return _read_env(channel_dir / ".env")
 
 
 # ── Auto-topic generation ────────────────────────────────────────────
@@ -254,7 +274,7 @@ def _recent_topics(channel_dir: Path, limit: int = 100) -> list[str]:
 def _auto_topic(channel_dir: Path, env: dict[str, str], target_code: str) -> str:
     """Ask Gemini for one fresh topic that avoids the recent history."""
     niche = env.get("NICHE") or env.get("CHANNEL_NAME") or "general language learning"
-    target_name = LANG_NAME.get(target_code, target_code.upper())
+    target_name = LANG_NAME_EN.get(target_code, target_code.upper())
     used = _recent_topics(channel_dir, limit=100)
     avoid_block = "\n".join(f"- {t}" for t in used) if used else "(none yet)"
 
@@ -270,7 +290,7 @@ def _auto_topic(channel_dir: Path, env: dict[str, str], target_code: str) -> str
     import generator
     from google.genai import types
 
-    generator._reset_gemini_keys()  # we set env vars after import-time
+    generator._reset_gemini_keys()
     model = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
     try:
         resp = generator._call_gemini(
@@ -283,20 +303,20 @@ def _auto_topic(channel_dir: Path, env: dict[str, str], target_code: str) -> str
         print(f"  ! auto-topic failed: {exc}")
         return ""
 
-    text = (resp.text or "").strip().splitlines()[0]
+    text = (resp.text or "").strip().splitlines()[0] if resp.text else ""
     return text.strip().strip('"').strip("'").strip("•- ").rstrip(".")
 
 
 def _topic_phase(channel_dir: Path, env: dict[str, str], target_code: str) -> str:
-    """Either type a topic or have one auto-generated (with regen + override)."""
-    niche = env.get("NICHE") or "(no niche set)"
-    items = [
-        ("manual", "Type your own"),
-        ("auto",   f"Auto-generate from niche: {niche!r}"),
-    ]
-    mode = _menu("Topic:", items, default_idx=0)
-    if mode == "manual":
-        return _ask_text("\nTopic (e.g. 'ordering coffee', 'kitchen items')")
+    """Default = auto-generate. Typing any text overrides it as manual input."""
+    niche = env.get("NICHE") or "your channel niche"
+    print(
+        f"\nTopic (default = auto-generate based on niche: '{niche}')\n"
+        f"  Press Enter for auto, or type your own topic:"
+    )
+    raw = input("> ").strip()
+    if raw:
+        return raw
 
     while True:
         print("\n[generating…]")
@@ -307,8 +327,8 @@ def _topic_phase(channel_dir: Path, env: dict[str, str], target_code: str) -> st
         print(f"\nSuggested topic: \"{suggestion}\"")
         choice = _menu(
             "What now?",
-            [("use", "Use this topic"),
-             ("regen", "Regenerate another"),
+            [("use",    "Use this topic"),
+             ("regen",  "Regenerate another"),
              ("manual", "Type my own instead")],
             default_idx=0,
         )
@@ -325,13 +345,14 @@ def _wizard() -> argparse.Namespace:
 
     channel_dir = _pick_or_create_channel(HERE / "channels")
     env = _read_env(channel_dir / ".env")
+    env = _ensure_api_key(channel_dir, env)
     _apply_env_to_os(env)  # so Gemini auto-topic can read keys
 
     layout = _menu("Pick a video layout:", LAYOUTS, default_idx=0)
 
     target = env.get("DEFAULT_TARGET_LANG", "").strip()
     if target:
-        print(f"\nTarget language: {target} ({LANG_NAME.get(target, '?')})  ← from .env")
+        print(f"\nTarget language: {target} ({LANG_NAME_EN.get(target, '?')})  ← from .env")
     else:
         target = _menu(
             "Pick the language to teach (target):",
@@ -341,7 +362,7 @@ def _wizard() -> argparse.Namespace:
 
     native = env.get("DEFAULT_NATIVE_LANG", "").strip()
     if native:
-        print(f"Native language: {native} ({LANG_NAME.get(native, '?')})  ← from .env")
+        print(f"Native language: {native} ({LANG_NAME_EN.get(native, '?')})  ← from .env")
     else:
         native = _menu(
             "Pick the on-screen translation language (native):",
@@ -360,8 +381,8 @@ def _wizard() -> argparse.Namespace:
     print("\n─── Summary ───")
     print(f"  channel : {channel_dir.name}")
     print(f"  layout  : {layout}")
-    print(f"  target  : {target} ({LANG_NAME.get(target, '?')})")
-    print(f"  native  : {native} ({LANG_NAME.get(native, '?')})")
+    print(f"  target  : {target} ({LANG_NAME_EN.get(target, '?')})")
+    print(f"  native  : {native} ({LANG_NAME_EN.get(native, '?')})")
     print(f"  voice   : {voice}")
     print(f"  topic   : {topic}")
     if not _confirm("\nRender now?"):
@@ -377,7 +398,7 @@ def _wizard() -> argparse.Namespace:
 def _parse_cli() -> argparse.Namespace:
     layout_keys = [k for k, _ in LAYOUTS]
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--channel", default="myvideo", help="Channel folder under channels/")
+    p.add_argument("--channel", default="example", help="Channel folder under channels/")
     p.add_argument("--layout", choices=layout_keys, help="Video layout")
     p.add_argument("--lang", help="Target language code")
     p.add_argument("--native", help="Native (translation) language code")
@@ -391,44 +412,54 @@ def _parse_cli() -> argparse.Namespace:
     return args
 
 
-# ── Request builder ──────────────────────────────────────────────────
+# ── Request builder (uses topic_picker — same as production engine) ──
 def _build_request(args: argparse.Namespace) -> str:
-    lang_vi = LANG_VI.get(args.lang, args.lang.upper())
-    voice_clause = f", giọng {args.voice}" if args.voice != "any" else ""
+    """Build the natural-language request via topic_picker.
 
-    if args.layout == "phrases":
-        return f"{args.count} câu tiếng {lang_vi} về {args.topic}{voice_clause}"
-    if args.layout == "quiz":
-        return f"Quiz: '{args.topic}' trong tiếng {lang_vi} nói thế nào?{voice_clause}"
-    if args.layout == "quiz_reverse":
-        return (f"Reverse quiz về chủ đề '{args.topic}': chọn 1 cụm từ tiếng {lang_vi} "
-                f"phổ biến rồi yêu cầu user đoán nghĩa tiếng Việt.{voice_clause}")
-    if args.layout == "whats_this":
-        return (f"Whats-this visual vocab — theme '{args.topic}' bằng tiếng {lang_vi}. "
-                f"Sinh 10 items concrete (noun đơn hoặc verb đơn), MỖI item có image_prompt "
-                f"mô tả cụ thể để gen AI illustration.{voice_clause}")
-    if args.layout == "whats_board":
-        return (f"Whats-board 9-grid cheat sheet — theme '{args.topic}' bằng tiếng {lang_vi}. "
-                f"Sinh ĐÚNG 9 items concrete NOUN imageable. MỖI item có image_prompt "
-                f"mô tả tượng hình.{voice_clause}")
-    if args.layout == "dialogue":
-        return (f"Dialogue mini-skit — scenario '{args.topic}' bằng tiếng {lang_vi}. "
-                f"Sinh 2 nhân vật (A và B) + cảnh nền + 6-8 lượt thoại. "
-                f"Mỗi lượt có target text + phiên âm + dịch tiếng Việt.{voice_clause}")
-    if args.layout == "fill_blank":
-        return (f"Fill-blank short quiz — chủ đề '{args.topic}' bằng tiếng {lang_vi}. "
-                f"Sinh 1 câu duy nhất có 1 từ blank ___ + 3 options + "
-                f"image_prompt photo realistic người đang làm hành động liên quan câu.")
-    if args.layout == "vocab_table":
-        return (f"Vocab table static poster — chủ đề '{args.topic}' bằng tiếng {lang_vi}. "
-                f"Sinh 8 items concrete + character mascot fitting the theme.")
-    if args.layout == "compare":
-        return (f"Compare 2-column static poster — chủ đề '{args.topic}' bằng tiếng {lang_vi}. "
-                f"Sinh 8 cặp so sánh (left=basic/casual/wrong, right=fluent/formal/correct).")
-    if args.layout == "guess_word":
-        return (f"Guess-word: chọn 1 từ tiếng {lang_vi} chủ đề '{args.topic}' rồi reveal "
-                f"từng chữ cái một, cuối cùng đọc tiếng Việt.{voice_clause}")
-    sys.exit(f"Unsupported layout: {args.layout}")
+    topic_picker._format_<layout>_request handles native-language switching:
+        native=vi  → Vietnamese phrasing (default pool style)
+        native=en  → prepends _EN_META so Gemini emits idiomatic English
+        native=xx  → falls through to vi pool (engine limitation; non-vi
+                     non-en channels should set DEFAULT_NATIVE_LANG=en)
+    Using topic_picker keeps the public CLI 1:1 with what the prod engine
+    sends, so bug fixes there flow through without parallel maintenance.
+    """
+    sys.path.insert(0, str(HERE / "bot"))
+    import topic_picker as tp
+
+    # Map target code → name as written in the *native* language.
+    if args.native == "vi":
+        target_name = LANG_NAME_VI.get(args.lang, args.lang.upper())
+    else:
+        target_name = LANG_NAME_EN.get(args.lang, args.lang.upper())
+
+    # Tell topic_picker which native we're in so its format helpers branch.
+    tp._NATIVE_LANG = args.native
+
+    topic = args.topic
+    layout = args.layout
+
+    if layout == "phrases":
+        return tp._format_phrases_request(topic, target_lang_name=target_name)
+    if layout == "quiz":
+        return tp._format_quiz_request(topic, target_lang_name=target_name)
+    if layout == "quiz_reverse":
+        return tp._format_quiz_reverse_request(topic, target_lang_name=target_name)
+    if layout == "whats_this":
+        return tp._format_whats_this_request(topic, target_lang_name=target_name)
+    if layout == "whats_board":
+        return tp._format_whats_board_request(topic, target_lang_name=target_name)
+    if layout == "guess_word":
+        return tp._format_guess_word_request(topic, target_lang_name=target_name)
+    if layout == "dialogue":
+        return tp._format_dialogue_request(topic, target_lang_name=target_name)
+    if layout == "fill_blank":
+        return tp._format_fill_blank_request(topic, target_lang_name=target_name)
+    if layout == "vocab_table":
+        return tp._format_vocab_table_request(topic, target_lang_name=target_name)
+    if layout == "compare":
+        return tp._format_compare_request(topic, target_lang_name=target_name)
+    sys.exit(f"Unsupported layout: {layout}")
 
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -440,8 +471,13 @@ def main() -> int:
     if not env_file.exists():
         sys.exit(
             f"ERROR: {env_file} not found.\n"
-            f"  Run RUN.bat / ./RUN.sh with no args to create one interactively."
+            f"  Run RUN.bat / ./RUN.sh with no args — the wizard will set it up."
         )
+
+    # Make sure the engine sees the channel env (CLI path skips the wizard's
+    # _apply_env_to_os; if Gemini key sits only in the .env, the engine still
+    # needs it in os.environ).
+    _apply_env_to_os(_read_env(env_file))
 
     request = _build_request(args)
 

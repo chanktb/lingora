@@ -9,9 +9,11 @@ bot/.venv/
 .env
 bot/.env
 bot/jobs/
-# Hide ALL real channels (secrets + config). Ship only the template below.
+# Hide ALL real channels (secrets + config). Ship only example + template.
 channels/*
 !channels/.gitkeep
+!channels/example/
+!channels/example/.env
 # Root template IS published:
 !.env.example
 
