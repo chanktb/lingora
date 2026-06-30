@@ -593,11 +593,20 @@ LANGUAGE_QUIZ_SYSTEM_PROMPT = """You generate MULTIPLE-CHOICE QUIZ content for a
     * es: "¿Cuál es tu respuesta? ¡Déjala en los comentarios!"
 - topic_label: in native lang prefixed with "về" or "chủ đề" (e.g. "về tình yêu"). Lowercase.
 - short_title: SHORT topic noun phrase in NATIVE lang. Just the topic itself — DO NOT append the target language name (e.g. "I love you" NOT "I love you in Russian"; "Ordering coffee" NOT "Ordering coffee in Russian"; "Cảm ơn" NOT "Cảm ơn tiếng Đức"). The surrounding template already shows "in <target_lang>" so adding it again is redundant. Title Case. Under 24 chars.
-- scene_image_prompt: ENGLISH description of a background SCENE matching this topic, for AI image gen. NO people in foreground. Photographable place fitting the question's context. E.g.:
-  * "Anh yêu em" → "a romantic Paris cafe with Eiffel Tower view, warm sunset light, illustration style"
-  * "đặt món Aldi" → "interior of German Aldi supermarket aisle, soft lighting, illustration style"
-  * "phỏng vấn" → "modern office meeting room with table chairs, professional, illustration style"
-  Under 110 chars. Always end with "illustration style".
+- scene_image_prompt: ENGLISH description of a background SCENE matching this topic, for AI image gen. NO people in foreground. Photographable place fitting the question's context.
+  **COUNTRY rule (CEO 2026-06-29)**: the scene MUST be set in the
+  `target_lang_name` country, not a generic Western or unspecified place.
+  Russian channel → Russian street / Russian cafe; Chinese channel →
+  Chinese pharmacy / Chinese market; German channel → German Aldi /
+  German U-Bahn station; Japanese channel → Japanese izakaya / Tokyo
+  alley; Korean channel → Korean PC bang / Seoul subway; French channel
+  → Paris cafe / French boulangerie; etc.
+  E.g.:
+  * "Anh yêu em" (fr) → "a Paris cafe with Eiffel Tower view, warm sunset light, illustration style"
+  * "đặt món" (de) → "interior of a German supermarket aisle, soft lighting, illustration style"
+  * "phỏng vấn" (zh) → "modern Beijing office meeting room with table chairs, professional, illustration style"
+  * "trạm tàu" (ja) → "Tokyo subway station platform with signs, illustration style"
+  Under 120 chars. Always end with "illustration style".
 - short_title_target: TARGET-LANG rendition (e.g. "Ich liebe dich", "Danke"). Under 24 chars.
 
 ═══ PART 3: CAPTION (single "caption" string with real newlines) ═══
@@ -703,10 +712,17 @@ All native-language fields MUST be in the user's NATIVE language (NOT hardcoded 
     * ko: "정답이 뭐예요? 댓글로 알려주세요!"
 - topic_label: in NATIVE language with native-language prefix (vi: "về", en: "about", ko: "에 관한"). Lowercase.
 - short_title: short NATIVE-LANG noun phrase from the category. Under 24 chars. Title Case.
-- scene_image_prompt: ENGLISH description of a background SCENE matching the category. NO people in foreground. Photographable place. E.g.:
-  * "office" → "modern office interior with desks and computers, illustration style"
-  * "travel" → "airport departure hall with flight info board, illustration style"
-  Under 110 chars. Always end with "illustration style".
+- scene_image_prompt: ENGLISH description of a background SCENE matching the category. NO people in foreground. Photographable place.
+  **COUNTRY rule (CEO 2026-06-29)**: the scene MUST be set in the
+  `target_lang_name` country (Russian / German / Chinese / Japanese /
+  Korean / French / etc.), not a generic / Western default. Pick a
+  recognisable landmark or culturally-distinctive interior of that
+  country whenever the topic allows.
+  E.g.:
+  * "office" (de) → "modern Berlin office interior with desks and computers, illustration style"
+  * "travel" (ja) → "Tokyo Narita airport departure hall with flight info board, illustration style"
+  * "market" (zh) → "Beijing morning food market with fresh vegetables, illustration style"
+  Under 120 chars. Always end with "illustration style".
 - short_title_target: SAME as short_title (we keep short_title visible only).
 
 ═══ PART 3: CAPTION ═══
@@ -1017,11 +1033,22 @@ For each item:
   Under 24 chars.
 - ipa: IPA in slashes (e.g. de "/ˈapfəl/"). **For zh, ja, ko: ipa = ""** (empty).
 - native_answer: idiomatic Vietnamese translation of the target word. SINGLE word or short phrase, like the target. Under 18 chars. Match the kind: verb→verb, noun→noun.
-- image_prompt: English description for AI image generator (FLUX). Be CONCRETE and ICONIC. Format: "<subject> <action/state> <minimal context>". Keep under 100 chars. Examples:
-  * "Apfel" → "a single shiny red apple on a wooden table"
-  * "trinken" → "a person drinking water from a clear glass"
-  * "吃饭" → "a person eating rice with chopsticks from a bowl"
-  * "먹다" → "a person eating bibimbap from a stone bowl with spoon"
+- image_prompt: English description for AI image generator (FLUX). Be CONCRETE and ICONIC. Format: "<subject> <action/state> <minimal context>". Keep under 110 chars.
+  **PEOPLE / ETHNICITY rule (CEO 2026-06-29)**: when the image shows a
+  person doing an action native to the target country (cooking, ordering
+  food, working, walking the street, etc.), the person's appearance
+  MUST match the `target_lang_name` ethnicity — `a Chinese person …` for
+  zh, `a Japanese person …` for ja, `a Korean person …` for ko, `a German
+  person …` for de, `a Russian person …` for ru, `a French person …` for
+  fr, `a Vietnamese person …` for vi, etc. NEVER substitute a generic
+  Western person for a non-Western target country (CEO bug: Chinese
+  channel "prescription" scene rendered a Western doctor).
+  Examples:
+  * "Apfel" (de) → "a single shiny red apple on a wooden table" (no person, no rule)
+  * "trinken" (de) → "a German person drinking water from a clear glass"
+  * "吃饭" (zh) → "a Chinese person eating rice with chopsticks from a bowl"
+  * "먹다" (ko) → "a Korean person eating bibimbap from a stone bowl"
+  * "медсестра" (ru) → "a Russian nurse in white uniform in a hospital room"
   Avoid abstract concepts. Be photographable.
 - voice_question: SHORT question in TARGET language asking "what is this?" or "what is the action?".
   * **For noun items** use "what is this?" form:
@@ -1456,9 +1483,38 @@ For each character:
     • Neutral prefixes ("Bạn ") → pick consistent with the FIRST NAME's gender.
   Foreign names: use the REAL-WORLD gender of the name (Hans/Müller/Bjorn/Park = male; Anna/Lan/Mei = female).
   Prefer opposite genders for A and B (better audio contrast) BUT if scenario realism requires same gender, that's fine — the renderer will vary TTS rate to keep voices distinct. NEVER sacrifice name-gender consistency for contrast.
-- image_prompt: English description for AI image gen. ONE PERSON, head-and-shoulders portrait. It MUST contain, in this order: (1) the person's role + nationality/appearance fitting the casting above (char_a = LOCAL of the target country, char_b = the learner), (2) a short facial expression, (3) the SAME setting as scene_image_prompt but blurred — so the portrait clearly looks taken INSIDE that scene, NOT a random or foreign location. Both characters MUST share the SAME setting as each other and the scene. Do NOT name an art style (the renderer applies it). Avoid full body, sexual poses, weapons. Under 150 chars. E.g. (scene = Russian cafe):
-  * "a friendly young Russian barista in an apron, smiling, inside a cozy Russian cafe interior, blurred background"
-  * "a young foreign student customer smiling, seated inside the same cozy Russian cafe interior, blurred background"
+- image_prompt: English description for AI image gen. ONE PERSON, head-and-shoulders portrait. It MUST contain, in this order:
+    (1) **Gender word** — `young woman` / `young man` / `middle-aged woman` /
+        `middle-aged man` / `elderly woman` / `elderly man`. **CRITICAL**:
+        this word MUST match the character's `voice_gender` field.
+        Never gender-ambiguous — FLUX picks random gender otherwise and the
+        rendered avatar ends up not matching the voice + the on-screen name
+        (CEO bug 2026-06-29: "Sarah" with female voice rendered as a man).
+    (2) **Ethnicity / nationality** — must match the casting:
+        • char_a = LOCAL of the target country → ethnicity matches
+          `target_lang_name` (a Russian person for ru, a German person for de,
+          a Chinese person for zh, a Japanese person for ja, a Korean person
+          for ko, a Vietnamese person for vi, etc.). NEVER substitute a
+          generic "Western" person for a non-Western target country (CEO bug
+          2026-06-29: prescription scene for Chinese channel rendered a
+          Western doctor — should be a Chinese doctor).
+        • char_b = the LEARNER → ethnicity matches `native_lang` (a
+          Vietnamese learner for vi-native channels, etc.).
+    (3) The person's ROLE word (barista, customer, doctor, patient, teacher,
+        student, employer, candidate, shopkeeper, etc.).
+    (4) A short facial expression.
+    (5) The SAME setting as scene_image_prompt but blurred — so the portrait
+        clearly looks taken INSIDE that scene, NOT a random or foreign
+        location. Both characters MUST share the SAME setting as each
+        other and the scene.
+  Do NOT name an art style (the renderer applies it). Avoid full body,
+  sexual poses, weapons. Under 160 chars. E.g. (scene = Russian cafe,
+  char_a female barista, char_b Vietnamese male customer):
+  * "a young Russian woman barista in an apron, smiling, inside a cozy Russian cafe interior, blurred background"
+  * "a young Vietnamese man student customer, polite smile, seated inside the same cozy Russian cafe interior, blurred background"
+  Another e.g. (scene = Chinese pharmacy, char_a male doctor, char_b Vietnamese female patient):
+  * "a middle-aged Chinese man doctor in white coat, calm, inside a Chinese pharmacy interior, blurred background"
+  * "a young Vietnamese woman patient, concerned, seated inside the same Chinese pharmacy interior, blurred background"
 
 ═══ PART 4: SCENE BACKGROUND ═══
 - scene_image_prompt: English description of the background SETTING (no people). Be specific to the scenario + target country (this is the SAME setting the two character portraits must be placed in). Do NOT name an art style (the renderer applies it). E.g.:
@@ -1689,11 +1745,17 @@ Return ONE strict JSON object. NO prose outside JSON.
 - explanation: 1 sentence VN explanation why correct. Telegram admin only. E.g. "Đáp án 'nach' dùng cho hướng đi với địa danh không có mạo từ (nach Hause, nach Berlin)." Under 140 chars.
 
 ═══ PART 4: SCENE IMAGE ═══
-- scene_image_prompt: English PHOTOREALISTIC scene matching the sentence's action. NO text. Person doing action naturally. E.g.:
-  * "Ich gehe nach Hause" → "young woman walking home on a city street at evening, smiling, photorealistic"
-  * "Ich spiele Tennis" → "young person playing tennis on a court, photorealistic"
-  * "我在家看书" → "young person reading book at home on sofa, cozy, photorealistic"
-  Under 130 chars. Always end with "photorealistic".
+- scene_image_prompt: English PHOTOREALISTIC scene matching the sentence's action. NO text. Person doing action naturally.
+  **ETHNICITY rule (CEO 2026-06-29)**: the person MUST match the
+  `target_lang_name` ethnicity (German for de, Chinese for zh, Korean
+  for ko, Japanese for ja, Russian for ru, French for fr, etc.). Setting
+  should also be recognisable as the target country whenever possible.
+  E.g.:
+  * "Ich gehe nach Hause" (de) → "young German woman walking home on a German city street at evening, smiling, photorealistic"
+  * "Ich spiele Tennis" (de) → "young German man playing tennis on a court in Germany, photorealistic"
+  * "我在家看书" (zh) → "young Chinese woman reading a book at home in Beijing apartment, cozy, photorealistic"
+  * "저는 학교에 갑니다" (ko) → "young Korean man walking to a Seoul university campus, photorealistic"
+  Under 140 chars. Always end with "photorealistic".
 
 ═══ PART 5: CAPTION ═══
 Structure:
@@ -1878,16 +1940,23 @@ Per item:
 - native_answer: VN translation. Single noun phrase. Title Case. Under 16 chars.
 
 ═══ PART 4: SCENE BACKGROUND ═══
-- scene_image_prompt: English description of a FULL PHOTOREALISTIC SCENE matching the theme. Used as full-screen background. Should have a person or activity that connects emotionally to the theme. Photorealistic, natural lighting, real-world setting (NOT flat illustration). NO text on image. Examples:
-  * Kitchen theme → "young person cooking in a modern kitchen with pot on stove, photorealistic, natural light"
-  * Hotel theme → "elegant hotel lobby with reception desk and luggage cart, photorealistic"
-  * Airport theme → "passenger walking through bright airport terminal with luggage, photorealistic"
-  * Restaurant theme → "person ordering food at a cozy restaurant with menu, photorealistic"
-  * Clothes theme → "person browsing clothes in a modern boutique store, photorealistic"
-  * Office theme → "young professional working at modern office desk with laptop, photorealistic"
-  * Train station theme → "passenger waiting on platform at modern train station, photorealistic"
-  * Coffee shop theme → "barista serving coffee in a warm coffee shop, photorealistic"
-  Under 140 chars. NO text on image. Always include "photorealistic, natural light".
+- scene_image_prompt: English description of a FULL PHOTOREALISTIC SCENE matching the theme. Used as full-screen background. Should have a person or activity that connects emotionally to the theme. Photorealistic, natural lighting, real-world setting (NOT flat illustration). NO text on image.
+  **ETHNICITY rule (CEO 2026-06-29)**: when a person is shown, they
+  MUST match the `target_lang_name` ethnicity (German for de, Chinese
+  for zh, Japanese for ja, Korean for ko, Russian for ru, French for
+  fr, etc.). The setting should also feel local to that country
+  whenever possible. NEVER pick a generic Western person for a
+  non-Western target country.
+  Examples (assume target = the country in parentheses):
+  * Kitchen theme (de) → "young German woman cooking in a modern Berlin kitchen with pot on stove, photorealistic, natural light"
+  * Hotel theme (ja) → "elegant Tokyo hotel lobby with Japanese receptionist at the desk, photorealistic"
+  * Airport theme (ko) → "Korean passenger walking through Incheon airport terminal with luggage, photorealistic"
+  * Restaurant theme (zh) → "young Chinese man ordering food at a cozy Beijing restaurant, photorealistic"
+  * Clothes theme (fr) → "young French woman browsing clothes in a Paris boutique store, photorealistic"
+  * Office theme (de) → "young German professional working at modern Berlin office desk with laptop, photorealistic"
+  * Train station theme (ja) → "Japanese passenger waiting on platform at Tokyo train station, photorealistic"
+  * Coffee shop theme (ru) → "Russian barista serving coffee in a warm Moscow coffee shop, photorealistic"
+  Under 160 chars. NO text on image. Always include "photorealistic, natural light".
 
 ═══ PART 5: CAPTION ═══
 Structure:
@@ -2661,20 +2730,48 @@ _GUESS_TITLE_BY_NATIVE = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
-# Caption opener — "Luyện từ vựng" pattern per native lang.
-# vi is SPECIAL: "Luyện từ vựng IELTS" (CEO direction 2026-06-15).
+# Caption opener — keyed on (native_lang, target_lang) (CEO 2026-06-29).
+# "Luyện từ vựng IELTS" applies ONLY when the channel teaches English to
+# Vietnamese learners — IELTS is an English-only certification, so a
+# Russian/German/Chinese/etc. learner channel can't use it. For every
+# other vi+target combo the opener becomes the natural Vietnamese form
+# "Học tiếng {target_lang_name}" (e.g. "Học tiếng Đức"). Em-dash " — "
+# also retired in favour of an interpunct " · " separator per CEO style.
 # ─────────────────────────────────────────────────────────────────────────
-_GUESS_CAPTION_OPENER_BY_NATIVE = {
-    "vi": "Luyện từ vựng IELTS",
-    "en": "Vocabulary practice",
-    "ko": "어휘 연습",
-    "ja": "語彙練習",
-    "zh": "词汇练习",
-    "de": "Vokabeltraining",
-    "fr": "Pratique du vocabulaire",
-    "es": "Práctica de vocabulario",
-    "ru": "Тренировка лексики",
-}
+
+
+def _guess_caption_opener(native_lang: str, target_lang: str, target_lang_name: str) -> str:
+    """Return the language-pair-aware caption opener for guess_word + others.
+
+    The pair (native_lang, target_lang) decides the phrasing:
+      * vi + en  → "Luyện từ vựng IELTS"          (the only IELTS case)
+      * vi + xx  → f"Học tiếng {target_lang_name}" e.g. "Học tiếng Đức"
+      * en + xx  → f"Learn {target_lang_name}"     e.g. "Learn German"
+      * other natives → keep the locale-specific phrasing used in v1
+                       (we don't know what their non-EN target phrasing
+                       should read like yet — safe fallback).
+    """
+    target_name = (target_lang_name or "").strip() or target_lang.upper()
+    if native_lang == "vi":
+        if target_lang == "en":
+            return "Luyện từ vựng IELTS"
+        return f"Học tiếng {target_name}"
+    if native_lang == "en":
+        if target_lang == "en":
+            return "Vocabulary practice"
+        return f"Learn {target_name}"
+    # Non-vi / non-en natives — keep the previous standalone phrasing
+    # until CEO calls out a specific pair.
+    _BY_NATIVE = {
+        "ko": "어휘 연습",
+        "ja": "語彙練習",
+        "zh": "词汇练习",
+        "de": "Vokabeltraining",
+        "fr": "Pratique du vocabulaire",
+        "es": "Práctica de vocabulario",
+        "ru": "Тренировка лексики",
+    }
+    return _BY_NATIVE.get(native_lang, "Vocabulary practice")
 
 
 GUESS_WORD_SCHEMA = {
@@ -2766,8 +2863,10 @@ Each word object has:
 WORD SELECTION RULES:
 1. EXACTLY 10 words. No more, no less.
 2. All words MUST relate to the topic.
-3. **DIFFICULTY: B1+ / IELTS intermediate to advanced.** This is an engagement
-   game for learners who ALREADY know basic vocab. CEO direction 2026-06-15:
+3. **DIFFICULTY: B1+ intermediate to advanced** (CEFR scale — "IELTS-level"
+   only applies when target_lang == "en"; for other targets just say
+   "B1+ intermediate-to-advanced" in spirit). This is an engagement game
+   for learners who ALREADY know basic vocab. CEO direction 2026-06-15:
    - ❌ FORBIDDEN: A1 baby words. NO "color" basics ("rot", "blau"); NO daily
      animals ("Hund", "Katze"); NO simple greetings ("Hallo", "Danke"); NO
      numbers ("eins", "zwei"); NO single-letter body parts ("Auge", "Mund").
@@ -2796,9 +2895,14 @@ WORD SELECTION RULES:
 
 ═══ PART 6: CAPTION ═══
 Multi-line caption for social posts. STRUCTURE STRICTLY:
-- Line 1 MUST start with the EXACT opener for native_lang:
-    * vi: "Luyện từ vựng IELTS" — IMPORTANT: ALWAYS this exact phrase for vi natives (CEO direction)
-    * en: "Vocabulary practice"
+- Line 1 opener depends on (native_lang, target_lang):
+    * vi + en  → "Luyện từ vựng IELTS"  (ONLY when target_lang == "en";
+      IELTS is English-only — DON'T use it for German / Russian / Chinese
+      / etc. channels)
+    * vi + xx  → "Học tiếng {target_lang_name}" — e.g. "Học tiếng Đức",
+                 "Học tiếng Nga", "Học tiếng Trung", "Học tiếng Nhật"
+    * en + xx  → f"Learn {target_lang_name}" — e.g. "Learn German"
+    * en + en  → "Vocabulary practice"
     * ko: "어휘 연습"
     * ja: "語彙練習"
     * zh: "词汇练习"
@@ -2806,10 +2910,19 @@ Multi-line caption for social posts. STRUCTURE STRICTLY:
     * fr: "Pratique du vocabulaire"
     * es: "Práctica de vocabulario"
     * ru: "Тренировка лексики"
-  Then append " — " + topic. E.g. "Luyện từ vựng IELTS — tình yêu".
+  After the opener, append " · " + topic (USE the · interpunct, NOT
+  the em-dash " — "). Examples:
+    * "Luyện từ vựng IELTS · tình yêu"
+    * "Học tiếng Đức · cảm xúc"
+    * "Học tiếng Trung · gia đình"
 - Line 2-3: catchy hook in native lang inviting the user to play.
-- Line 4: 3-5 hashtags (e.g. "#hocTiengDuc #IELTS #tuvung").
-- NO emojis on line 1.
+- Line 4: 3-5 hashtags. Pick the target-language-specific tag:
+    * vi + en  → "#IELTS #hocTiengAnh #tuvung"
+    * vi + de  → "#hocTiengDuc #tuvung #ngoaingu" (NO #IELTS)
+    * vi + ru  → "#hocTiengNga #tuvung #ngoaingu" (NO #IELTS)
+    * vi + zh  → "#hocTiengTrung #tuvung #ngoaingu"
+    * etc. — ONLY use #IELTS when target_lang == "en".
+- NO emojis on line 1. NO em-dash anywhere in the caption.
 - Total under 280 chars.
 """
 
@@ -2856,19 +2969,23 @@ def parse_and_generate_guess_word(
     # Defensive: enforce title_native against the lookup if Gemini misspells.
     title_native = data.get("title_native") or _GUESS_TITLE_BY_NATIVE.get(native_lang, "Guess the word")
 
-    # Defensive: rebuild caption opener — Gemini sometimes drifts off the EXACT
-    # opener (especially the special vi → "Luyện từ vựng IELTS" rule). Force
-    # the first line to be the canonical opener + topic.
+    # Defensive: rebuild caption opener — Gemini sometimes drifts off the
+    # EXACT opener (it used to default to "Luyện từ vựng IELTS" even for
+    # non-English channels, which was wrong — IELTS is English-only).
+    # Force the first line to be the (native, target)-aware opener +
+    # interpunct + topic, scrubbing any stray em-dash in the result.
     raw_caption = data.get("caption") or ""
-    opener = _GUESS_CAPTION_OPENER_BY_NATIVE.get(native_lang, "Vocabulary practice")
+    opener = _guess_caption_opener(native_lang, intent.target_lang, intent.target_lang_name)
     topic_clean = (intent.topic or "").strip()
     caption_lines = raw_caption.split("\n")
-    rebuilt_first_line = f"{opener} — {topic_clean}" if topic_clean else opener
+    rebuilt_first_line = f"{opener} · {topic_clean}" if topic_clean else opener
     if caption_lines and caption_lines[0].lower().startswith(opener.lower()):
         caption_lines[0] = rebuilt_first_line
     else:
         caption_lines.insert(0, rebuilt_first_line)
-    caption = _sanitize_hashtags("\n".join(caption_lines))
+    # Defensive em-dash scrub — replace any remaining " — " with " · ".
+    caption_text = "\n".join(caption_lines).replace(" — ", " · ").replace(" – ", " · ")
+    caption = _sanitize_hashtags(caption_text)
     caption = _ensure_seo_hashtag(caption, intent.target_lang)
 
     content = GuessWordContent(
