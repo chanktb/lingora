@@ -1115,6 +1115,10 @@ async def run_once(force: bool = False) -> int:
         intent, content = await asyncio.to_thread(
             generator.parse_and_generate_guess_word, request_text,
         )
+    elif layout_type == "vocab_card":
+        intent, content = await asyncio.to_thread(
+            generator.parse_and_generate_vocab_card, request_text,
+        )
     else:
         intent, content = await asyncio.to_thread(
             generator.parse_and_generate, request_text, niche=niche,
@@ -1313,6 +1317,15 @@ async def run_once(force: bool = False) -> int:
         for i, w in enumerate(content.words, start=1):
             segments.append(tts.AudioSegment(f"reveal_{i}", w.target_word, voice, rate=target_rate))
         segments.append(tts.AudioSegment("outro_native", content.outro_native, native_voice, rate=vn_voice_rate))
+    elif layout_type == "vocab_card":
+        # CEO 2026-06-30: target-lang ONLY. 2 clips — `word` reads the focal
+        # vocab, `example` reads the example sentence. Slow (-15%) so a
+        # learner can hear each syllable.
+        target_rate = _norm_rate(os.environ.get("QUIZ_REVERSE_TARGET_RATE", "-15%"))
+        segments = [
+            tts.AudioSegment("word", content.target_word, voice, rate=target_rate),
+            tts.AudioSegment("example", content.example_sentence, voice, rate=target_rate),
+        ]
     else:
         # phrases layout — VN voice (intro/outro/per-phrase translation) all +30%.
         # Target language phrase stays at base_rate for learning clarity.
@@ -1517,6 +1530,33 @@ async def run_once(force: bool = False) -> int:
             native_lang=intent.native_lang,
             lesson_number=int(state.get("post_count", 0)) + 1,
             hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
+        )
+    elif layout_type == "vocab_card":
+        # 1 photorealistic illustration + 2 target-voice clips already synth'd
+        # (`word`, `example`). composer wires the master.wav premix.
+        image_dir = job_dir / "ai_images"
+        image_dir.mkdir(parents=True, exist_ok=True)
+        log.info("Gen photorealistic scene for vocab_card...")
+        try:
+            await image_gen.gen_image(content.image_prompt, image_dir / "scene.png")
+        except image_gen.CFQuotaExhaustedError:
+            log.warning("CF quota cạn — bỏ lượt vocab_card [%s]", CHANNEL_DIR.name)
+            await _maybe_notify_quota_skip(intent.topic)
+            return 0
+        except Exception as exc:  # noqa: BLE001
+            log.exception("vocab_card image gen failed: %s", exc)
+            await notify(
+                f"❌ <b>vocab_card image gen lỗi</b> [{CHANNEL_DIR.name}]\n"
+                f"📝 <i>{intent.topic}</i>\n"
+                f"💥 <code>{str(exc)[:300]}</code>"
+            )
+            return 1
+        composer.build_vocab_card_project(
+            content=content, audio_clips=clips, audio_src_dir=audio_dir,
+            image_src_dir=image_dir,
+            out_dir=job_dir, target_lang_name=intent.target_lang_name,
+            hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
+            native_lang=intent.native_lang,
         )
     else:
         # phrases layout — generate 1 background scene image (best-effort, fallback to no-scene if fails)

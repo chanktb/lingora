@@ -1479,6 +1479,32 @@ def _format_guess_word_request(theme: str, target_lang_name: str = "Đức") -> 
     )
 
 
+def _format_vocab_card_request(theme: str, target_lang_name: str = "Đức") -> str:
+    """Format a vocab_card request — ONE word, illustration, multi-language grid.
+
+    CEO 2026-06-30: single concrete word in target lang, with:
+      • a photorealistic illustration,
+      • a pronunciation guide,
+      • an example sentence (target lang) with the word highlighted,
+      • translations into the channel's native lang + 6 popular world langs.
+    """
+    if _NATIVE_LANG == "en":
+        return (
+            _EN_META
+            + f"Vocab card — pick ONE useful {target_lang_name} word on the theme "
+            f"'{theme}'. Include pronunciation, an example sentence that uses "
+            f"the word (mark the inflected form), a photo-realistic illustration "
+            f"prompt, and translations into the channel's native language plus "
+            f"6 popular world languages (exclude the target language itself)."
+        )
+    return (
+        f"Vocab card — 1 từ {target_lang_name} hữu ích theo chủ đề '{theme}'. "
+        f"Kèm phiên âm, 1 câu ví dụ {target_lang_name} chứa từ (đánh dấu dạng biến "
+        f"đổi nếu có), prompt ảnh photorealistic, và bản dịch sang tiếng mẹ đẻ "
+        f"+ 6 ngôn ngữ thông dụng (loại bỏ chính {target_lang_name})."
+    )
+
+
 def _format_dialogue_request(scenario: str, target_lang_name: str = "Đức") -> str:
     """Format a 2-character dialogue (mini skit) request."""
     if _NATIVE_LANG == "en":
@@ -1558,6 +1584,7 @@ _SPECIAL_LAYOUTS = [
 _ALL_LAYOUTS = [
     "phrases", "quiz", "quiz_reverse", "whats_this", "whats_board",
     "dialogue", "fill_blank", "vocab_table", "compare", "guess_word",
+    "vocab_card",
 ]
 
 
@@ -1678,6 +1705,7 @@ def pick_next_request(
         "vocab_table":  _pick_vocab_table,
         "compare":      _pick_compare,
         "guess_word":   _pick_guess_word,
+        "vocab_card":   _pick_vocab_card,
     }
     picker = PICKERS.get(next_layout, _pick_phrases)
     return picker(state, target_lang, target_lang_name)
@@ -1782,6 +1810,29 @@ def _pick_guess_word(state: dict, target_lang: str, target_lang_name: str) -> tu
     state["last_special_layout"] = "guess_word"
     base_req = _format_guess_word_request(theme, target_lang_name)
     return base_req + _avoid_recent_hint(used, theme, n_show=10), "guess_word"
+
+
+def _pick_vocab_card(state: dict, target_lang: str, target_lang_name: str) -> tuple[str, str]:
+    """Pick a single-word vocab theme for the vocab_card layout (CEO 2026-06-30).
+
+    Reuses the BOARD theme pool (kitchen / nature / office / ...) — Gemini
+    then picks ONE concrete word inside that theme. Anti-dup window
+    shares ``used_vocab_card_themes`` so the same theme doesn't repeat
+    too often per channel.
+    """
+    used = state.setdefault("used_vocab_card_themes", [])
+    pool = LANGUAGE_BOARD_THEMES.get(target_lang) or LANGUAGE_BOARD_THEMES.get("de", [])
+    if not pool:
+        return _pick_quiz_forward(state, target_lang, target_lang_name)
+    available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
+    if not available:
+        available = pool
+        used.clear()
+    theme = random.choice(available)
+    used.append(theme)
+    state["last_special_layout"] = "vocab_card"
+    base_req = _format_vocab_card_request(theme, target_lang_name)
+    return base_req + _avoid_recent_hint(used, theme, n_show=10), "vocab_card"
 
 
 def _pick_dialogue(state: dict, target_lang: str, target_lang_name: str) -> tuple[str, str]:

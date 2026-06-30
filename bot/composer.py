@@ -20,6 +20,8 @@ from generator import (
     VocabTableContent, VocabTableItem,
     CompareContent, ComparePair,
     GuessWordContent, GuessWord,
+    VocabCardContent, VocabCardTranslation,
+    _LANG_FLAG,
 )
 from tts import AudioClip
 
@@ -2146,6 +2148,210 @@ def build_guess_word_project(
              "ipa": t.ipa}
             for t in timings
         ],
+        "caption": content.caption,
+    }
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return out_dir
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  VOCAB_CARD layout (CEO 2026-06-30)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _vocab_card_highlight_html(sentence: str, highlight: str) -> str:
+    """Wrap the first occurrence of ``highlight`` inside ``sentence`` with
+    a ``span.hl``. When the highlight isn't a verbatim substring (Gemini
+    occasionally emits the lemma instead of the inflected form), return
+    the sentence unchanged — template still renders fine, just without
+    visual emphasis. Caller passes pre-trusted Gemini text so no
+    HTML-escape is needed.
+    """
+    if not sentence or not highlight or highlight not in sentence:
+        return sentence
+    return sentence.replace(
+        highlight, '<span class="hl">' + highlight + '</span>', 1,
+    )
+
+
+def build_vocab_card_project(
+    *,
+    content: VocabCardContent,
+    audio_clips: list[AudioClip],
+    audio_src_dir: Path,
+    image_src_dir: Path,
+    out_dir: Path,
+    target_lang_name: str = "",
+    hyperframes_version: str = "0.6.52",
+    channel_dir: Path | None = None,
+    native_lang: str = "vi",
+) -> Path:
+    """Materialize a HyperFrames project for the vocab_card layout.
+
+    Audio: exactly 2 target-language clips (`word`, `example`). NO intro
+    voice, NO outro voice — CEO spec 2026-06-30: target-lang only.
+
+    Timing (~8s):
+        0.05  chime#1
+        0.50  word voice
+        +0.55 chime#2
+        +0.05 example voice
+        +1.00 hold
+    """
+    if len(audio_clips) != 2:
+        raise ValueError("vocab_card expects 2 audio clips, got " + str(len(audio_clips)))
+
+    clip_by_name = {c.name: c for c in audio_clips}
+    word_clip = clip_by_name["word"]
+    example_clip = clip_by_name["example"]
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    assets_audio = out_dir / "assets" / "audio"
+    assets_audio.mkdir(parents=True, exist_ok=True)
+    for clip in audio_clips:
+        shutil.copy2(audio_src_dir / clip.file, assets_audio / clip.file)
+
+    static_dst = out_dir / "static"
+    static_dst.mkdir(parents=True, exist_ok=True)
+    has_logo = False
+    has_chime = False
+    ASSET_EXTS = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".mp3", ".wav"}
+    layers: list[Path] = [TEMPLATE_DIR / "static"]
+    if channel_dir is not None:
+        layers.append(channel_dir / "static")
+    for layer in layers:
+        if not layer.exists():
+            continue
+        for f in layer.iterdir():
+            if f.is_file() and f.suffix.lower() in ASSET_EXTS:
+                shutil.copy2(f, static_dst / f.name)
+                if f.name.lower() == "logo.png":
+                    has_logo = True
+                if f.name.lower() == "chime.mp3":
+                    has_chime = True
+
+    scene_src = image_src_dir / "scene.png"
+    if not scene_src.exists():
+        raise FileNotFoundError("vocab_card missing scene image: " + str(scene_src))
+    shutil.copy2(scene_src, static_dst / "scene.png")
+
+    word_chime_start = 0.05
+    word_audio_start = round(word_chime_start + CHIME_DURATION + 0.05, 2)
+    word_audio_dur = word_clip.duration
+    example_chime_start = round(word_audio_start + word_audio_dur + 0.55, 2)
+    example_audio_start = round(example_chime_start + CHIME_DURATION + 0.05, 2)
+    example_audio_dur = example_clip.duration
+    HOLD_TAIL = 1.0
+    total_duration = round(example_audio_start + example_audio_dur + HOLD_TAIL, 2)
+
+    use_master_audio = False
+    if has_chime:
+        chime_path = static_dst / "chime.mp3"
+        premix_clips: list[tuple[Path, float, float]] = [
+            (chime_path, word_chime_start, 0.85),
+            (assets_audio / word_clip.file, word_audio_start, 1.0),
+            (chime_path, example_chime_start, 0.75),
+            (assets_audio / example_clip.file, example_audio_start, 1.0),
+        ]
+        master_path = assets_audio / "master.wav"
+        if _premix_audio_track(
+            out_path=master_path,
+            total_duration=total_duration,
+            clips=premix_clips,
+        ):
+            use_master_audio = True
+
+    word_len = len(content.target_word)
+    word_size_class = (
+        "word-xlong" if word_len > 14 else
+        "word-long" if word_len > 9 else ""
+    )
+    example_len = len(content.example_sentence)
+    example_size_class = (
+        "example-xlong" if example_len > 70 else
+        "example-long" if example_len > 50 else ""
+    )
+
+    tx_rows = [
+        {"lang_code": t.lang_code, "text": t.text,
+         "flag": _LANG_FLAG.get(t.lang_code, "\U0001F3F3️")}
+        for t in content.translations
+    ]
+    tx_columns = 2 if len(tx_rows) >= 6 else 1
+
+    example_html = _vocab_card_highlight_html(
+        content.example_sentence, content.example_highlight,
+    )
+
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        autoescape=select_autoescape(["html"]),
+    )
+    template = env.get_template("vocab_card.html.j2")
+    html = template.render(
+        demo_mode=_demo_mode(),
+        total_duration=total_duration,
+        target_word=content.target_word,
+        pronunciation=content.pronunciation,
+        example_html=example_html,
+        translations=tx_rows,
+        tx_columns=tx_columns,
+        word_size_class=word_size_class,
+        example_size_class=example_size_class,
+        use_master_audio=use_master_audio,
+        word_chime_start=word_chime_start,
+        word_audio_start=word_audio_start,
+        word_audio_duration=round(word_audio_dur + 0.1, 2),
+        example_chime_start=example_chime_start,
+        example_audio_start=example_audio_start,
+        example_audio_duration=round(example_audio_dur + 0.1, 2),
+        has_chime=has_chime,
+        channel_name=os.environ.get("CHANNEL_NAME", DEFAULT_CHANNEL_NAME),
+        avatar_emoji=os.environ.get("AVATAR_EMOJI", DEFAULT_AVATAR_EMOJI),
+        has_logo=has_logo,
+        theme=_theme_from_env(),
+        native_lang=native_lang,
+        target_lang_name=target_lang_name or "",
+    )
+    (out_dir / "index.html").write_text(html, encoding="utf-8")
+
+    (out_dir / "meta.json").write_text(
+        json.dumps({"id": out_dir.name, "name": out_dir.name}, indent=2),
+        encoding="utf-8",
+    )
+    (out_dir / "hyperframes.json").write_text(
+        json.dumps({
+            "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
+            "registry": "https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry",
+            "paths": {"blocks": "compositions",
+                      "components": "compositions/components",
+                      "assets": "assets"},
+        }, indent=2),
+        encoding="utf-8",
+    )
+    (out_dir / "package.json").write_text(
+        json.dumps({
+            "name": out_dir.name, "private": True, "type": "module",
+            "scripts": {
+                "render": f"npx --yes hyperframes@{hyperframes_version} render",
+                "lint":   f"npx --yes hyperframes@{hyperframes_version} lint",
+            },
+        }, indent=2),
+        encoding="utf-8",
+    )
+
+    manifest = {
+        "layout_type": "vocab_card",
+        "total_duration": total_duration,
+        "target_word": content.target_word,
+        "pronunciation": content.pronunciation,
+        "example_sentence": content.example_sentence,
+        "example_highlight": content.example_highlight,
+        "translations": [{"lang_code": t.lang_code, "text": t.text}
+                         for t in content.translations],
         "caption": content.caption,
     }
     (out_dir / "manifest.json").write_text(

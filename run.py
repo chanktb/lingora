@@ -41,6 +41,7 @@ LAYOUTS = [
     ("fill_blank",    "Fill-blank — one sentence with a missing word + 3 options"),
     ("guess_word",    "Guess-word — reveal target word letter by letter"),
     ("quiz_reverse",  "Reverse quiz — guess the meaning of a phrase"),
+    ("vocab_card",    "Vocab card — 1 word + illustration + multi-language grid"),
 ]
 
 LANGS = [
@@ -451,6 +452,8 @@ def _build_request(args: argparse.Namespace) -> str:
         return tp._format_whats_board_request(topic, target_lang_name=target_name)
     if layout == "guess_word":
         return tp._format_guess_word_request(topic, target_lang_name=target_name)
+    if layout == "vocab_card":
+        return tp._format_vocab_card_request(topic, target_lang_name=target_name)
     if layout == "dialogue":
         return tp._format_dialogue_request(topic, target_lang_name=target_name)
     if layout == "fill_blank":

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary:        {{ theme.primary }};
+        --primary-light:  {{ theme.primary_light }};
+        --accent:         {{ theme.accent }};
+        --accent-gold:    {{ theme.accent_gold }};
+        --bg-grad:        {{ theme.bg_grad }};
+        --primary-rgb:    {{ theme.primary_shadow_rgb }};
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        background: #0a0e27;
+        font-family: "Inter", "Be Vietnam Pro",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        color: #fff;
+      }
+      .clip { position: absolute; }
+
+      /* ── Background ── */
+      #bg {
+        top: 0; left: 0; width: 1080px; height: 1920px;
+        background:
+          radial-gradient(ellipse 700px 700px at 12% 10%, rgba(34,211,238,0.35), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 88% 90%, rgba(251,191,36,0.30), transparent 60%),
+          radial-gradient(ellipse 540px 540px at 50% 50%, rgba(180,100,255,0.25), transparent 60%),
+          var(--bg-grad);
+      }
+
+      /* ── Brand chip (top-left, inside safe zone) ── */
+      #brand {
+        top: 320px; left: 80px;
+        display: flex; align-items: center; gap: 18px;
+        padding: 14px 28px 14px 14px;
+        background: rgba(255,255,255,0.12);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 999px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 32px; font-weight: 800;
+        color: #fff;
+        max-width: 600px;
+      }
+      .brand-dot {
+        width: 60px; height: 60px; border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        display: flex; align-items: center; justify-content: center;
+        font-size: 32px; line-height: 1;
+        overflow: hidden;
+      }
+      .brand-dot img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+      /* ── Illustration card ── */
+      #illus {
+        top: 420px; left: 80px; right: 80px;
+        height: 540px;
+        border-radius: 36px;
+        overflow: hidden;
+        background: #0a1325;
+        box-shadow: 0 24px 56px rgba(0,0,0,0.55),
+                    inset 0 0 0 1px rgba(255,255,255,0.06);
+      }
+      #illus img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+      /* ── Vocab word ── */
+      #word {
+        top: 1000px; left: 0; right: 0; text-align: center;
+        font-family: "Be Vietnam Pro", "Inter",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 140px; font-weight: 900; line-height: 1;
+        letter-spacing: -2px;
+        color: #ffffff;
+        text-shadow: 0 8px 38px rgba(34,211,238,0.55),
+                     0 0 28px rgba(255,255,255,0.20);
+      }
+      /* Auto-shrink for very long words */
+      #word.word-long { font-size: 100px; }
+      #word.word-xlong { font-size: 80px; }
+
+      /* ── Pronunciation pill ── */
+      #pron {
+        top: 1185px; left: 0; right: 0; text-align: center;
+      }
+      #pron span {
+        display: inline-block;
+        padding: 12px 32px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 14px;
+        font-family: "Inter", sans-serif;
+        font-size: 38px; font-weight: 600;
+        letter-spacing: 2px;
+        color: rgba(255,255,255,0.85);
+      }
+
+      /* ── Example sentence card ── */
+      #example {
+        top: 1290px; left: 80px; right: 80px;
+        min-height: 130px;
+        padding: 32px 36px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 26px;
+        text-align: center;
+        font-family: "Be Vietnam Pro", "Inter",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 44px; font-weight: 700; line-height: 1.32;
+        color: #f0f4ff;
+        text-shadow: 0 3px 14px rgba(0,0,0,0.45);
+      }
+      #example .hl {
+        color: var(--accent-gold, #fde047);
+        font-weight: 900;
+        background: rgba(251,191,36,0.18);
+        padding: 2px 12px;
+        border-radius: 10px;
+      }
+      #example.example-long { font-size: 38px; }
+      #example.example-xlong { font-size: 32px; }
+
+      /* ── Translations grid ── */
+      #tx {
+        top: 1500px; left: 60px; right: 60px;
+        display: grid; column-gap: 18px; row-gap: 12px;
+      }
+      #tx.col-1 { grid-template-columns: 1fr; }
+      #tx.col-2 { grid-template-columns: 1fr 1fr; }
+      .tx-row {
+        display: flex; align-items: center; gap: 18px;
+        padding: 16px 22px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 18px;
+        font-family: "Be Vietnam Pro", "Inter",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 30px; font-weight: 700;
+        color: #e8edf5;
+        min-height: 40px;
+        line-height: 1.15;
+      }
+      .tx-row .tx-flag {
+        font-size: 36px; line-height: 1;
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+                     "Twemoji Mozilla", sans-serif;
+        flex-shrink: 0;
+      }
+      .tx-row .tx-text { flex: 1; overflow-wrap: break-word; }
+      .tx-row.tx-native {
+        grid-column: 1 / -1;
+        background: linear-gradient(90deg, rgba(251,191,36,0.32), rgba(251,191,36,0.14));
+        border-color: rgba(251,191,36,0.65);
+        color: #fff;
+        font-size: 34px;
+        font-weight: 900;
+        box-shadow: 0 6px 22px rgba(251,191,36,0.22);
+      }
+      .tx-row.tx-native .tx-flag { font-size: 42px; }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div id="bg" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="0"></div>
+
+      <div id="brand" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1">
+        <div class="brand-dot">
+          {% if has_logo %}<img src="static/logo.png" alt="" />{% else %}<span>{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span>{{ channel_name }}</span>
+      </div>
+
+      <div id="illus" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="2">
+        <img src="static/scene.png" alt="" />
+      </div>
+
+      <div id="word" class="clip {{ word_size_class }}" data-start="0" data-duration="{{ total_duration }}" data-track-index="3">{{ target_word }}</div>
+
+      <div id="pron" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="4">
+        <span>[{{ pronunciation }}]</span>
+      </div>
+
+      <div id="example" class="clip {{ example_size_class }}" data-start="0" data-duration="{{ total_duration }}" data-track-index="5">
+        {{- example_html|safe -}}
+      </div>
+
+      <div id="tx" class="clip col-{{ tx_columns }}" data-start="0" data-duration="{{ total_duration }}" data-track-index="6">
+        {% for tx in translations %}
+        <div class="tx-row {% if loop.first %}tx-native{% endif %}">
+          <span class="tx-flag">{{ tx.flag }}</span>
+          <span class="tx-text">{{ tx.text }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# ── Audio: single premixed master if available, else per-clip ── #}
+      {% if use_master_audio %}
+      <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/master.wav"></audio>
+      {% else %}
+      {% if has_chime %}
+      <audio id="chime-word" class="clip" data-start="{{ word_chime_start }}" data-duration="0.5" data-track-index="8" data-volume="0.85" src="static/chime.mp3"></audio>
+      <audio id="chime-example" class="clip" data-start="{{ example_chime_start }}" data-duration="0.5" data-track-index="8" data-volume="0.75" src="static/chime.mp3"></audio>
+      {% endif %}
+      <audio id="audio-word" class="clip" data-start="{{ word_audio_start }}" data-duration="{{ word_audio_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/word.wav"></audio>
+      <audio id="audio-example" class="clip" data-start="{{ example_audio_start }}" data-duration="{{ example_audio_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/example.wav"></audio>
+      {% endif %}
+    </div>
+  </body>
+</html>

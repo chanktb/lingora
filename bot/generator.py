@@ -3027,6 +3027,303 @@ def parse_and_generate_guess_word(
     return intent, content
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  VOCAB_CARD layout (CEO 2026-06-30) — 1 word + image + multi-translation grid
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Inspired by Russian Path "fishing" reference card: one target-language
+# word, one illustration, an example sentence with the word highlighted
+# in colour, and a translation grid pinning 6 popular world languages
+# (plus the channel's native language as a highlighted top row).
+#
+# CEO rules locked 2026-06-30:
+#   • 6 popular langs pinned cố định, NEVER duplicate target_lang.
+#   • Native lang appears as a highlighted top row, also excluded from
+#     the 6-popular grid (no duplicate of the native row).
+#   • Voice is TARGET-LANG ONLY (no intro/outro/native voice).
+#   • Caption focuses on the vocab word + translation list.
+
+# Default 6-popular order — picked for global reach + emoji-flag friendliness.
+_VOCAB_CARD_POPULAR_DEFAULT = ["en", "es", "fr", "de", "zh", "ja"]
+# Backup pool when a default is removed (because it's target/native).
+# Order = priority of replacement.
+_VOCAB_CARD_POPULAR_BACKUP = ["ru", "ko", "pt", "id", "it"]
+
+# Flag emoji per ISO code — used by template AND caption builder.
+_LANG_FLAG = {
+    "vi": "🇻🇳", "en": "🇺🇸", "es": "🇪🇸", "fr": "🇫🇷", "de": "🇩🇪",
+    "zh": "🇨🇳", "ja": "🇯🇵", "ko": "🇰🇷", "ru": "🇷🇺", "pt": "🇵🇹",
+    "id": "🇮🇩", "th": "🇹🇭", "it": "🇮🇹", "tr": "🇹🇷", "pl": "🇵🇱",
+    "nl": "🇳🇱", "ar": "🇸🇦", "hi": "🇮🇳",
+}
+
+# Friendly name per ISO code — used by caption fallback.
+_LANG_NAME_EN = {
+    "vi": "Vietnamese", "en": "English", "es": "Spanish", "fr": "French",
+    "de": "German", "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+    "ru": "Russian", "pt": "Portuguese", "id": "Indonesian", "th": "Thai",
+    "it": "Italian", "tr": "Turkish", "pl": "Polish", "nl": "Dutch",
+}
+
+
+def _vocab_card_popular_langs(native_lang: str, target_lang: str) -> list[str]:
+    """Return EXACTLY 6 ISO codes for the bottom translation grid.
+
+    Rules (CEO 2026-06-30):
+      1. Start from the default popular list.
+      2. Drop the target language (the vocab IS in target lang — no point).
+      3. Drop the native language (already shown in the highlighted top row).
+      4. If we now have < 6, fill from the backup pool (also filtered).
+      5. Truncate to exactly 6.
+    """
+    excluded = {target_lang, native_lang}
+    out = [c for c in _VOCAB_CARD_POPULAR_DEFAULT if c not in excluded]
+    backups = [c for c in _VOCAB_CARD_POPULAR_BACKUP if c not in excluded and c not in out]
+    while len(out) < 6 and backups:
+        out.append(backups.pop(0))
+    return out[:6]
+
+
+@dataclass
+class VocabCardTranslation:
+    lang_code: str   # ISO 639-1
+    text: str        # translation in that language
+
+
+@dataclass
+class VocabCardContent:
+    target_word: str                       # word in target lang (with stress mark when relevant)
+    pronunciation: str                     # Latin transliteration friendly to native reader
+    image_prompt: str                      # English for FLUX — single subject + minimal context
+    example_sentence: str                  # full sentence in target lang containing target_word
+    example_highlight: str                 # exact substring of example_sentence to highlight (= form of target_word)
+    translations: list[VocabCardTranslation]  # [native, *6 popular] = 7 rows total
+    topic_label: str
+    short_title: str                       # native-lang short title (= native translation of target_word)
+    short_title_target: str                # target-lang (= target_word)
+    caption: str                           # FB caption
+
+
+VOCAB_CARD_SCHEMA = {
+    "type": "OBJECT",
+    "required": [
+        "intent", "target_word", "pronunciation", "image_prompt",
+        "example_sentence", "example_highlight", "translations",
+        "topic_label", "short_title", "short_title_target", "caption",
+    ],
+    "properties": {
+        "intent": {
+            "type": "OBJECT",
+            "required": ["target_lang", "native_lang", "topic", "count",
+                         "voice_gender", "target_lang_name"],
+            "properties": {
+                "target_lang":      {"type": "STRING"},
+                "native_lang":      {"type": "STRING"},
+                "topic":            {"type": "STRING"},
+                "count":            {"type": "INTEGER"},
+                "voice_gender":     {"type": "STRING"},
+                "target_lang_name": {"type": "STRING"},
+            },
+        },
+        "target_word":       {"type": "STRING"},
+        "pronunciation":     {"type": "STRING"},
+        "image_prompt":      {"type": "STRING"},
+        "example_sentence":  {"type": "STRING"},
+        "example_highlight": {"type": "STRING"},
+        "translations": {
+            "type": "OBJECT",
+            "description": "Map ISO-639-1 code → translation. MUST include the channel's "
+                           "native_lang + the 6 codes listed in PART 5 of the prompt.",
+            "properties": {
+                "vi": {"type": "STRING"}, "en": {"type": "STRING"},
+                "es": {"type": "STRING"}, "fr": {"type": "STRING"},
+                "de": {"type": "STRING"}, "zh": {"type": "STRING"},
+                "ja": {"type": "STRING"}, "ko": {"type": "STRING"},
+                "ru": {"type": "STRING"}, "pt": {"type": "STRING"},
+                "id": {"type": "STRING"}, "it": {"type": "STRING"},
+            },
+        },
+        "topic_label":         {"type": "STRING"},
+        "short_title":         {"type": "STRING"},
+        "short_title_target":  {"type": "STRING"},
+        "caption":             {"type": "STRING"},
+    },
+}
+
+
+LANGUAGE_VOCAB_CARD_SYSTEM_PROMPT = """You generate VOCAB CARD content for a short-form vertical (9:16) language-learning video. ONE target-language word, ONE photo-realistic illustration, ONE example sentence with the word highlighted, and a translation grid covering the channel's native lang + 6 popular world languages. Output strict JSON, no prose.
+
+═══ PART 1: INTENT ═══
+- target_lang: ISO 639-1 of the LEARNED language (e.g. "ru", "de", "ja")
+- native_lang: ISO 639-1 the channel speaks to (e.g. "vi", "en")
+- topic: short phrase in native lang ("sở thích", "đồ ăn", "công sở")
+- count: ALWAYS 1
+- voice_gender: "male" | "female" | "any" (default "any")
+- target_lang_name: lang name in user's native lang ("Nga", "Đức")
+- layout_type: ALWAYS "vocab_card"
+
+═══ PART 2: THE WORD ═══
+- target_word: ONE word/short phrase in TARGET language script (Cyrillic for ru, Hangul for ko, Hanzi for zh). Include stress marks where the language uses them (Russian: "рыба́лка"; Spanish: "café"). Single word OR a 2-word noun phrase max. Pick something USEFUL and concrete — vocabulary a B1-B2 learner would write down.
+- pronunciation: Latin transliteration friendly to native-lang reader. Hyphens between syllables, UPPER on the stressed syllable. Examples:
+    * ru "рыба́лка" → "ry-bAl-ka"
+    * de "Verschreibung" → "fer-SHRY-bung"
+    * zh "钓鱼" → "diào-yú" (with tone marks for zh — Pinyin standard)
+    * ja "釣り" → "tsuri" (Hepburn)
+    * ko "낚시" → "nak-si"
+  Under 28 chars.
+
+═══ PART 3: ILLUSTRATION ═══
+- image_prompt: English prompt for AI image (FLUX). Photorealistic, ONE concrete subject illustrating the word. Match target-country ethnicity when a person is shown (Russian person for ru, Chinese for zh, etc. — see ethnicity rule in dialogue prompt). Format: "<subject> <action/state> <minimal context>, photorealistic". Under 130 chars. Examples:
+    * "рыба́лка" (ru) → "a Russian father and son fishing from a lake pier at golden hour, photorealistic"
+    * "Verschreibung" (de) → "a German doctor handing a prescription paper to a patient, photorealistic"
+    * "钓鱼" (zh) → "a Chinese man fishing peacefully by a calm lake at sunrise, photorealistic"
+
+═══ PART 4: EXAMPLE SENTENCE ═══
+- example_sentence: ONE natural sentence in TARGET language that uses target_word in a real context. B1-B2 level. Under 80 chars. The word should fit naturally — show the word in action, not in a dictionary frame.
+- example_highlight: the EXACT substring of example_sentence that the renderer will paint in highlight colour. This is usually target_word in the inflected form it appears in the sentence (Russian declension, German case, etc.). MUST be a verbatim substring of example_sentence.
+  Examples (assume target_word in parentheses):
+    * (рыба́лка) example "Я люблю рыба́лку каждое лето." → example_highlight = "рыба́лку"
+    * (Verschreibung) example "Der Arzt gibt mir eine Verschreibung." → example_highlight = "Verschreibung"
+    * (钓鱼) example "我喜欢周末去钓鱼。" → example_highlight = "钓鱼"
+
+═══ PART 5: TRANSLATIONS ═══
+- translations: an OBJECT mapping ISO-639-1 code → translation string for that language.
+  MUST include EXACTLY these keys:
+    1. The channel's `native_lang` (e.g. "vi") — rendered as the highlighted top row.
+    2. EXACTLY 6 popular language codes from this fixed pool: en, es, fr, de, zh, ja.
+       BUT: if a code in that list equals `target_lang` OR equals `native_lang`,
+       SKIP it (no point translating the word into the language we're learning,
+       no point duplicating the native row). Fill the gap from this backup pool
+       in order: ru, ko, pt, id, it — also skipping any that equal target_lang
+       or native_lang. End result: native_lang + EXACTLY 6 other codes.
+  Examples:
+    * channel native=vi, target=ru → keys: vi, en, es, fr, de, zh, ja (no swap needed)
+    * channel native=vi, target=en → keys: vi, es, fr, de, zh, ja, ru (en dropped → ru in)
+    * channel native=vi, target=de → keys: vi, en, es, fr, zh, ja, ru (de dropped → ru in)
+    * channel native=en, target=ru → keys: en, es, fr, de, zh, ja, ko (en is native, en row highlighted; ko added since en is native_lang excluded from list automatically? — see clarification: native LANG ROW counts separately so en is the native-row, drop en from popular too)
+  TRANSLATION VALUES — keep concise (1-3 words usually):
+    * vi: "câu cá", en: "fishing", de: "Angeln", fr: "pêche", es: "pesca",
+    * zh: "钓鱼", ja: "釣り", ko: "낚시", ru: "рыбалка", pt: "pesca", id: "memancing"
+  Style: lowercase by default (capitalised when grammar requires, e.g. German nouns: "Angeln", "Verschreibung").
+
+═══ PART 6: SHORT TITLES ═══
+- short_title: native-lang translation of target_word (1-3 words). Title Case. ≤ 24 chars.
+  Examples: "Câu Cá", "Đơn Thuốc", "Học Tập".
+- short_title_target: the target_word itself (without stress marks if they bloat). ≤ 24 chars.
+
+═══ PART 7: TOPIC LABEL ═══
+- topic_label: native lang prefixed with "về" (vi) / "about" (en) / etc. Lowercase.
+  E.g. vi: "về câu cá", en: "about fishing".
+
+═══ PART 8: CAPTION ═══
+Multi-line FB caption focused on THE WORD + translations.
+Structure for native_lang = vi:
+  Line 1: "<FLAG_target> Từ vựng tiếng <target_lang_name> · <short_title>"
+  blank
+  Line 3: "📖 <target_word> [<pronunciation>]"
+  Line 4: "🇻🇳 <native_translation>"  (where 🇻🇳 = flag of native_lang)
+  blank
+  Line 6: "🌍 Dịch sang ngôn ngữ khác:"
+  6 lines: "<flag_emoji> <translation>" for each of the 6 popular langs (in order)
+  blank
+  Line ~14: "✏️ Ví dụ: <example_sentence>"
+  blank
+  Line ~16: 3-5 hashtags (target-specific, NO #IELTS unless target=en):
+    * vi+ru → "#hocTiengNga #tuvung #ngoaingu"
+    * vi+de → "#hocTiengDuc #tuvung #ngoaingu"
+    * vi+en → "#IELTS #hocTiengAnh #tuvung"
+    * vi+zh → "#hocTiengTrung #tuvung #ngoaingu"
+    * vi+ja → "#hocTiengNhat #tuvung #ngoaingu"
+    * vi+ko → "#hocTiengHan #tuvung #ngoaingu"
+For en native, mirror the structure in English:
+  Line 1: "<FLAG_target> <target_lang_name> vocabulary · <short_title>"
+  Line 6: "🌍 Other translations:"
+  Line 14: "✏️ Example: <example_sentence>"
+NO em-dash. Use " · " interpunct.
+Total under 600 chars.
+
+═══ HARD RULES ═══
+- target_word in TARGET-LANGUAGE SCRIPT, never Latinized.
+- example_highlight is a VERBATIM substring of example_sentence.
+- translations include EXACTLY 7 keys: native_lang + 6 popular (filtered as above).
+- No intro/outro/CTA voice copy — this is a 1-card video with target voice only.
+- Safe for general audience (no NSFW / politics).
+"""
+
+
+def parse_and_generate_vocab_card(
+    user_text: str,
+    *,
+    client: Optional[genai.Client] = None,
+    model: Optional[str] = None,
+) -> tuple[ParsedIntent, VocabCardContent]:
+    """Generate vocab_card content for a single-word translation video."""
+    if model is None:
+        model = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
+
+    resp = _call_gemini(client,
+        model=model,
+        contents=user_text,
+        config=types.GenerateContentConfig(
+            system_instruction=LANGUAGE_VOCAB_CARD_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=VOCAB_CARD_SCHEMA,
+            temperature=0.7,
+        ),
+    )
+    data = json.loads(resp.text)
+
+    intent_data = data["intent"]
+    intent = ParsedIntent(
+        target_lang=intent_data["target_lang"].lower(),
+        native_lang=intent_data.get("native_lang", "vi").lower(),
+        topic=intent_data["topic"],
+        count=1,
+        voice_gender=(intent_data.get("voice_gender") or "any").lower(),
+        target_lang_name=intent_data["target_lang_name"],
+        layout_type="vocab_card",
+    )
+
+    raw_translations = data.get("translations") or {}
+    if not isinstance(raw_translations, dict):
+        raise ValueError("translations must be a dict {lang_code: text}")
+
+    # Build the canonical ordered list: native row first, then the 6 popular
+    # picks. Anything Gemini sent that ISN'T in that whitelist is dropped (no
+    # surprise extras), and any missing key is logged but skipped (template
+    # tolerates < 7 rows gracefully).
+    popular = _vocab_card_popular_langs(intent.native_lang, intent.target_lang)
+    ordered_keys = [intent.native_lang] + popular
+    translations: list[VocabCardTranslation] = []
+    for code in ordered_keys:
+        text = (raw_translations.get(code) or "").strip()
+        if not text:
+            # Defensive: skip silently — template just shows fewer rows.
+            continue
+        translations.append(VocabCardTranslation(lang_code=code, text=text))
+
+    # Caption: keep what Gemini emitted but enforce target-aware hashtag
+    # (drops stray #IELTS for non-English channels) + em-dash scrub.
+    caption_raw = (data.get("caption") or "").strip()
+    caption_raw = caption_raw.replace(" — ", " · ").replace(" – ", " · ")
+    caption = _sanitize_hashtags(caption_raw)
+    caption = _ensure_seo_hashtag(caption, intent.target_lang)
+
+    content = VocabCardContent(
+        target_word=data["target_word"],
+        pronunciation=data.get("pronunciation", ""),
+        image_prompt=data.get("image_prompt", ""),
+        example_sentence=data.get("example_sentence", ""),
+        example_highlight=data.get("example_highlight", "") or data["target_word"],
+        translations=translations,
+        topic_label=data.get("topic_label", ""),
+        short_title=data.get("short_title", ""),
+        short_title_target=data.get("short_title_target", "") or data["target_word"],
+        caption=caption,
+    )
+    return intent, content
+
+
 if __name__ == "__main__":
     import sys
 
