@@ -560,7 +560,7 @@ LANGUAGE_QUIZ_SYSTEM_PROMPT = """You generate MULTIPLE-CHOICE QUIZ content for a
 - layout_type: ALWAYS "quiz"
 
 ═══ PART 2: QUIZ CONTENT ═══
-- question_native: question in user's native language. WRITE NATIVELY for that language — DO NOT translate a Vietnamese template literally. Under 60 chars. Examples per language (style only — vary the wording):
+- question_native: question in user's native language. WRITE NATIVELY for that language — DO NOT translate a Vietnamese template literally. Under 60 chars. **The quoted phrase inside this question MUST be the EXACT same string as `short_title` below** — they are the same phrase asked in two different fields (one for voice, one for visual title). Examples per language (style only — vary the wording):
     * vi: "Trong tiếng Đức, 'Anh yêu em' là gì?" / "'Anh yêu em' trong tiếng Đức nói thế nào?"
     * en: "How do you say 'I love you' in German?" / "What's 'I love you' in German?" / "'I love you' in German — how?" (NEVER "In German, 'I love you' is what?" — translated VN)
     * ko: "독일어로 '사랑해'는 뭐예요?"
@@ -584,7 +584,7 @@ LANGUAGE_QUIZ_SYSTEM_PROMPT = """You generate MULTIPLE-CHOICE QUIZ content for a
     - Shuffle so correct answer is not always A
 - correct_answer: which label is correct: "A" | "B" | "C" | "D"
 - explanation: 1-2 sentence explanation in NATIVE language. Write natively for the user's language (not translated VN). E.g. vi: "Đáp án A. 'Ich liebe dich' = 'Anh yêu em'. 'Liebe' = tình yêu." | en: "Answer A. 'Ich liebe dich' means 'I love you' — 'Liebe' is the German word for love.". Under 120 chars. Used for the FB pinned comment.
-- intro_native: spoken question in native language. Write NATIVELY in that language. SAME natural phrasing as `question_native` above — re-use or paraphrase. Under 50 chars.
+- intro_native: spoken question in native language. Write NATIVELY in that language. SAME natural phrasing as `question_native` above — re-use or paraphrase. **MUST quote the SAME phrase as `short_title` and `question_native`** so the voice the viewer hears matches the title on screen (CEO bug 2026-06-29: voice said "tháng trước" while title showed "thời gian"). Under 50 chars.
 - outro_native: spoken outro CTA in NATIVE language. Idiomatic short-video closer in that language — NOT translated VN. Under 60 chars. Examples per language (style only):
     * vi: "Bạn chọn đáp án nào? Comment ngay bên dưới nhé!" / "Đáp án của bạn là gì? Comment đi nào!"
     * en: "What's your answer? Drop it below!" / "Comment your guess below!" / "Which one did you pick?"
@@ -592,7 +592,33 @@ LANGUAGE_QUIZ_SYSTEM_PROMPT = """You generate MULTIPLE-CHOICE QUIZ content for a
     * ja: "あなたの答えはどれ?コメントで教えて!"
     * es: "¿Cuál es tu respuesta? ¡Déjala en los comentarios!"
 - topic_label: in native lang prefixed with "về" or "chủ đề" (e.g. "về tình yêu"). Lowercase.
-- short_title: SHORT topic noun phrase in NATIVE lang. Just the topic itself — DO NOT append the target language name (e.g. "I love you" NOT "I love you in Russian"; "Ordering coffee" NOT "Ordering coffee in Russian"; "Cảm ơn" NOT "Cảm ơn tiếng Đức"). The surrounding template already shows "in <target_lang>" so adding it again is redundant. Title Case. Under 24 chars.
+- short_title: **the EXACT native phrase the viewer is being asked to
+  translate** — i.e. the native-language version of the CORRECT option.
+  This is the word/phrase displayed BIG in the on-screen title
+  ("Trong tiếng Đức, '<short_title>' là gì?"). It MUST match what the
+  intro_native voice asks so a viewer who only watches the screen
+  (mute) can answer correctly.
+  ⚠️ CEO bug 2026-06-29: topic="thời gian" with correct answer
+  "letzten Monat" rendered the title with "THỜI GIAN" — viewer saw
+  "What is 'thời gian' in German?" but the actual answers were all
+  variants of "Monat" (month). Title and answer pool mismatched.
+  ✅ Correct behaviour for that case: `short_title = "Tháng trước"`
+  (the VN translation of the correct option "letzten Monat") — title
+  reads "Trong tiếng Đức, 'THÁNG TRƯỚC' là gì?" and the 4 Monat options
+  are now visibly answerable.
+  RULES:
+    * short_title = the VN/native translation of the CORRECT option.
+      Not the topic, not the category, not "Vocabulary", not the target
+      language phrase. The SPECIFIC phrase the voice asks.
+    * Quote-style: NO quotation marks (the template wraps it).
+    * NO target-language name appended ("Tháng trước" NOT "Tháng trước
+      tiếng Đức"). The template already shows "Trong tiếng X" around it.
+    * Title Case in the original native casing. Under 24 chars.
+  Examples (every example below assumes target_lang = de):
+    * topic="tình yêu", correct="Ich liebe dich" → short_title="Anh yêu em"
+    * topic="thời gian", correct="letzten Monat" → short_title="Tháng trước"
+    * topic="đặt món", correct="Die Speisekarte, bitte" → short_title="Cho tôi thực đơn"
+    * topic="thời tiết", correct="Es schneit" → short_title="Tuyết rơi"
 - scene_image_prompt: ENGLISH description of a background SCENE matching this topic, for AI image gen. NO people in foreground. Photographable place fitting the question's context.
   **COUNTRY rule (CEO 2026-06-29)**: the scene MUST be set in the
   `target_lang_name` country, not a generic Western or unspecified place.
