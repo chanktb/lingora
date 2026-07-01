@@ -1538,7 +1538,7 @@ async def run_once(force: bool = False) -> int:
         image_dir.mkdir(parents=True, exist_ok=True)
         log.info("Gen photorealistic scene for vocab_card...")
         try:
-            await image_gen.gen_image(content.image_prompt, image_dir / "scene.png")
+            await image_gen.gen_image(content.image_prompt, image_dir / "scene.png", style="cinematic")
         except image_gen.CFQuotaExhaustedError:
             log.warning("CF quota cạn — bỏ lượt vocab_card [%s]", CHANNEL_DIR.name)
             await _maybe_notify_quota_skip(intent.topic)

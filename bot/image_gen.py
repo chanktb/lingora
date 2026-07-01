@@ -59,14 +59,22 @@ _CARTOON_TOKENS = [
 CF_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
 
-def _style_mode() -> str:
-    """Current style: 'cinematic' or 'cartoon' (default). Driven by IMAGE_STYLE."""
+def _style_mode(override: str | None = None) -> str:
+    """Current style: 'cinematic' or 'cartoon' (default). Driven by IMAGE_STYLE.
+
+    `override` — per-call opt-in ("cinematic" / "cartoon"). Used by layouts
+    that want a specific style regardless of global env (e.g. vocab_card
+    always cinematic — the whole point of the card is a real-looking scene
+    behind the focal word).
+    """
+    if override:
+        return override.strip().lower()
     return (os.environ.get("IMAGE_STYLE") or "cartoon").strip().lower()
 
 
-def _style_suffix() -> str:
+def _style_suffix(override: str | None = None) -> str:
     return (
-        STYLE_SUFFIX_CINEMATIC if _style_mode() == "cinematic"
+        STYLE_SUFFIX_CINEMATIC if _style_mode(override) == "cinematic"
         else STYLE_SUFFIX_CARTOON
     )
 
@@ -87,12 +95,16 @@ def _sanitize_subject(prompt: str) -> str:
     return out.strip(" ,.;")
 
 
-def build_full_prompt(subject_prompt: str) -> str:
-    """Compose the final FLUX prompt = (sanitized) subject + style suffix."""
+def build_full_prompt(subject_prompt: str, style: str | None = None) -> str:
+    """Compose the final FLUX prompt = (sanitized) subject + style suffix.
+
+    `style` — per-call override ("cinematic" / "cartoon"), takes precedence
+    over the IMAGE_STYLE env var. Layouts pass their fixed style here.
+    """
     subject = subject_prompt
-    if _style_mode() == "cinematic":
+    if _style_mode(style) == "cinematic":
         subject = _sanitize_subject(subject_prompt)
-    return f"{subject}. {_style_suffix()}"
+    return f"{subject}. {_style_suffix(style)}"
 
 
 class CFQuotaExhaustedError(RuntimeError):
@@ -164,14 +176,15 @@ def _request_one(account_id: str, api_token: str, full_prompt: str, dest: Path, 
 
 
 def _fetch_blocking(subject_prompt: str, dest: Path, *,
-                    steps: int = 4, timeout: float = 90.0) -> int:
+                    steps: int = 4, timeout: float = 90.0,
+                    style: str | None = None) -> int:
     """Blocking call with multi-account rotation on 429 (daily-quota exhausted).
 
     Tries each configured account in order until one succeeds. On HTTP 429 from
     an account, moves to next. Other errors propagate.
     """
     accounts = _accounts()
-    full_prompt = build_full_prompt(subject_prompt)
+    full_prompt = build_full_prompt(subject_prompt, style=style)
     last_429: urllib.error.HTTPError | None = None
     for acc_id, token in accounts:
         try:
@@ -193,7 +206,8 @@ def _fetch_blocking(subject_prompt: str, dest: Path, *,
 
 
 async def gen_image(subject_prompt: str, dest: Path, *, steps: int = 4,
-                    timeout: float = 90.0, retries: int = 4) -> Path:
+                    timeout: float = 90.0, retries: int = 4,
+                    style: str | None = None) -> Path:
     """Generate 1 image → save to dest. Async wrapper, with retry on transient err.
 
     Backoff is gentler for 429 (rate limit) since CF Workers AI shares burst quota
@@ -203,7 +217,8 @@ async def gen_image(subject_prompt: str, dest: Path, *, steps: int = 4,
     for attempt in range(retries + 1):
         try:
             size = await asyncio.to_thread(
-                _fetch_blocking, subject_prompt, dest, steps=steps, timeout=timeout,
+                _fetch_blocking, subject_prompt, dest,
+                steps=steps, timeout=timeout, style=style,
             )
             log.info("  ✓ %s (%d bytes, attempt %d)", dest.name, size, attempt + 1)
             return dest
