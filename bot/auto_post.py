@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,27 @@ import poster         # noqa: E402
 import renderer       # noqa: E402
 import topic_picker   # noqa: E402
 import tts            # noqa: E402
+
+
+# ─── Dialogue avatar/voice gender consistency ──────────────────────────
+# CEO bug 2026-07-02 (zh channel): dialogue nhân vật NAM nhưng giọng NỮ.
+# Giọng chọn theo tên/voice_gender, còn avatar sinh từ image_prompt — 2 nguồn
+# tách rời nên lệch được khi Gemini viết image_prompt không khớp gender. Sau khi
+# CHỐT gender mỗi nhân vật, ép luôn gender word đầu image_prompt để avatar == giọng.
+_GENDER_NOUN = {"male": "man", "female": "woman"}
+
+
+def _sync_image_prompt_gender(image_prompt: str, gender: str) -> str:
+    """Force the portrait's leading gender word to match the chosen voice gender."""
+    noun = _GENDER_NOUN.get(gender, "woman")
+    opp = "man" if noun == "woman" else "woman"
+    p = image_prompt or ""
+    # Flip the FIRST opposite-gender word (\bman\b won't match inside "woman").
+    new, n = re.subn(rf"\b{opp}\b", noun, p, count=1)
+    if n == 0 and not re.search(rf"\b{noun}\b", new):
+        # No explicit gender word → prepend one so FLUX can't pick at random.
+        new = f"a young {noun}, {p}" if p else f"a young {noun}"
+    return new
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -1241,7 +1263,8 @@ async def run_once(force: bool = False) -> int:
             s = (name or "").strip()
             low = s.lower()
             male_prefix = ("anh ", "bác ", "ông ", "chú ", "cậu ")
-            female_prefix = ("chị ", "cô ", "bà ", "dì ", "em ")
+            # "em " bỏ ra: mơ hồ giới tính (em trai/em gái) — để rơi về fallback Gemini.
+            female_prefix = ("chị ", "cô ", "bà ", "dì ")
             if any(low.startswith(p) for p in male_prefix):
                 return "male"
             if any(low.startswith(p) for p in female_prefix):
@@ -1254,6 +1277,9 @@ async def run_once(force: bool = False) -> int:
         gender_b = _gender_from_name(content.char_b.name, raw_b)
         content.char_a.voice_gender = gender_a
         content.char_b.voice_gender = gender_b
+        # Keep the rendered avatar's gender in lockstep with the chosen voice.
+        content.char_a.image_prompt = _sync_image_prompt_gender(content.char_a.image_prompt, gender_a)
+        content.char_b.image_prompt = _sync_image_prompt_gender(content.char_b.image_prompt, gender_b)
 
         try:
             voice_a = await tts.pick_voice_async(intent.target_lang, gender_a)
