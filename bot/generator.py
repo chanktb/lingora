@@ -149,7 +149,7 @@ LANG_NAMES = {
 @dataclass
 class Phrase:
     target: str
-    pronunciation: str        # Vietnamese-style transliteration with hyphens + stress accents
+    pronunciation: str        # native-lang respelling (vi=Vietnamese, en=English, ru=Cyrillic, else IPA)
     ipa: str                  # standard IPA notation
     native: str
 
@@ -271,7 +271,7 @@ Examples:
     * **zh (Chinese)**: standard PINYIN with tone marks (ā á ǎ à ē é ě è ī í ǐ ì ō ó ǒ ò ū ú ǔ ù ǖ ǘ ǚ ǜ). Words are space-separated; **NO HYPHENS** between syllables of a single word. E.g. for 我要报销差旅费 → "Wǒ yào bàoxiāo chālǚfèi" (NOT "Wǒ yào bao-xiāo cha-lu-fèi"). This is the form every learner of Chinese reads in textbooks.
     * **ja (Japanese)**: standard ROMAJI (Hepburn). No hyphens between syllables. E.g. "ohayō gozaimasu".
     * **ko (Korean)**: standard Revised Romanization. E.g. "annyeonghaseyo".
-    * **Other (ru, de, fr, es, th, ...)**: Vietnamese-reader-friendly transliteration with hyphens on syllable boundaries + acute accents on stressed syllables (e.g. "Ya tib-yá liu-bliú"). Under 28 chars.
+    * **Other (ru, de, fr, es, th, ...)**: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese. native vi → Vietnamese respelling ("Ya tib-yá liu-bliú"); native en → English respelling ("yah tee-BYAH lyoo-BLYOO", CAPS = stress); native ru → Cyrillic respelling ("я ти-бя лью-блю"); any other native_lang → IPA. Hyphens on syllable boundaries + mark the stressed syllable. Under 28 chars.
 - ipa = standard IPA notation wrapped in slashes, e.g. "/jɑ tʲɪˈbʲɑ lʲʊˈblʲʊ/" for "Я тебя люблю". Use the official IPA conventions for the target language. Keep under 32 chars.
     * **For zh, ja, ko**: ipa = "" (EMPTY STRING). The Pinyin / Romaji / Revised Romanization above IS the standard phonetic — adding IPA on top is redundant and clutters the layout. Leave it empty for these languages.
 - target phrase doubles as TTS narration: prefer 2–5 word natural-sounding phrases, ending with period or exclamation.
@@ -574,7 +574,7 @@ LANGUAGE_QUIZ_SYSTEM_PROMPT = """You generate MULTIPLE-CHOICE QUIZ content for a
         * **zh**: standard Pinyin with tone marks, NO hyphens between syllables, e.g. "Wǒ ài nǐ" (NOT "Wo-aì-nỉ")
         * **ja**: standard Romaji (Hepburn), no hyphens, e.g. "ohayō"
         * **ko**: standard Revised Romanization, e.g. "annyeong"
-        * **Other (ru, de, fr, es, th, ...)**: Vietnamese-reader-friendly Latin transliteration with hyphens + stress accents (under 24 chars)
+        * **Other (ru, de, fr, es, th, ...)**: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi→Vietnamese, en→English (CAPS=stress), ru→Cyrillic, other native→IPA; hyphens + mark stress (under 24 chars)
     - ipa: standard IPA in slashes, e.g. "/ɪç ˈliːbə dɪç/" (under 28 chars)
         * **For zh, ja, ko**: ipa = "" (EMPTY — Pinyin/Romaji is already the standard phonetic; redundant IPA clutters the card)
   CONSTRAINTS:
@@ -1055,7 +1055,7 @@ For each item:
   * **zh**: standard PINYIN with tone marks (NO hyphens between syllables of a single word). E.g. "chī fàn" / "wǒ ài nǐ".
   * **ja**: standard ROMAJI (Hepburn). E.g. "tabemasu" / "neko".
   * **ko**: Revised Romanization. E.g. "meokda" / "gae".
-  * **de/fr/es/ru/...**: Vietnamese-reader-friendly transliteration with hyphens between syllables + acute on stressed syllable. E.g. de "trinken" → "trinh-cờn"; "Apfel" → "áp-fờl".
+  * **de/fr/es/ru/...**: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi→Vietnamese ("Apfel"→"áp-fờl"), en→English ("Apfel"→"AHP-fuhl", CAPS=stress), ru→Cyrillic ("апфель"), other native→IPA. Hyphens + mark stress.
   Under 24 chars.
 - ipa: IPA in slashes (e.g. de "/ˈapfəl/"). **For zh, ja, ko: ipa = ""** (empty).
 - native_answer: idiomatic Vietnamese translation of the target word. SINGLE word or short phrase, like the target. Under 18 chars. Match the kind: verb→verb, noun→noun.
@@ -1275,7 +1275,7 @@ For each item:
   * **zh**: standard PINYIN with tone marks (NO hyphens between syllables of a single word). E.g. "māo" / "píngguǒ".
   * **ja**: Hepburn romaji. E.g. "neko" / "ringo".
   * **ko**: Revised Romanization. E.g. "go-yang-i" / "sa-gwa".
-  * **de/fr/es/ru**: Vietnamese-reader-friendly with hyphens + acute on stressed syllable. E.g. de "die Katze" → "đi ka-tsơ".
+  * **de/fr/es/ru**: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi ("die Katze"→"đi ka-tsơ"), en ("dee KAHT-suh", CAPS=stress), ru (Cyrillic), other native→IPA. Hyphens + mark stress.
   Under 22 chars.
 - ipa: IPA in slashes. **For zh, ja, ko: ipa = ""** (empty).
 - native_answer: Vietnamese translation, SINGLE noun. Title-case. Under 16 chars. E.g. "Mèo" / "Quả táo" / "Ô tô".
@@ -1558,7 +1558,7 @@ For each turn:
   * **zh**: PINYIN with tone marks, no hyphens between syllables of a word.
   * **ja**: Hepburn romaji.
   * **ko**: Revised Romanization.
-  * **de/fr/es/ru**: Vietnamese-reader-friendly with hyphens + acute on stress. Under 90 chars.
+  * **de/fr/es/ru**: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi→Vietnamese, en→English (CAPS=stress), ru→Cyrillic, other native→IPA; hyphens + mark stress. Under 90 chars.
 - ipa: standard IPA in slashes. **For zh/ja/ko: ipa = ""**.
 - native: idiomatic Vietnamese translation. Natural conversational tone. Under 70 chars.
 
@@ -1961,7 +1961,7 @@ Per item:
   * **zh**: PINYIN with tone marks, no hyphens.
   * **ja**: Hepburn romaji.
   * **ko**: Revised Romanization.
-  * **de/fr/es/ru**: Vietnamese-reader-friendly with hyphens + acute. E.g. "der Topf" → "đơ tốp".
+  * **de/fr/es/ru**: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi ("der Topf"→"đơ tốp"), en ("der TOPF", CAPS=stress), ru (Cyrillic), other native→IPA. Hyphens + mark stress.
   Under 18 chars.
 - native_answer: VN translation. Single noun phrase. Title Case. Under 16 chars.
 
@@ -2185,7 +2185,7 @@ Per pair:
     * zh: PINYIN with tone marks. "xiè xie"
     * ko: Revised Romanization. "annyeonghaseyo"
     * ja: Hepburn romaji. "arigatou"
-    * de/fr/es/ru: Vietnamese-reader-friendly with hyphens + acute. "đan-kê"
+    * de/fr/es/ru: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi ("đan-kê"), en ("DAHN-kuh", CAPS=stress), ru (Cyrillic), other native→IPA; hyphens + mark stress
   Under 22 chars.
 - right_pron: same scheme. Under 28 chars.
 - left_native: VN translation of left_target. Under 30 chars.
@@ -2499,7 +2499,7 @@ Output strict JSON. No prose outside the JSON.
 
 Rules:
 - All target-language strings MUST be in the script of the target language (Cyrillic for Russian, Hangul for Korean, Hanzi for Chinese, etc.).
-- Pronunciation = Latin transliteration ("Vietnamese-reader-friendly" style) with hyphens on syllable boundaries and accent marks on stressed syllables (e.g. "Ya tib-yá liu-bliú"). Keep it under 28 chars when possible.
+- Pronunciation = reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Vietnamese: vi → Vietnamese respelling ("Ya tib-yá liu-bliú"); en → English respelling ("yah tee-BYAH lyoo-BLYOO", CAPS = stress); ru → Cyrillic respelling; any other native → IPA. Hyphens on syllable boundaries + mark the stressed syllable. Under 28 chars when possible.
 - ipa = standard IPA notation wrapped in slashes (e.g. "/jɑ tʲɪˈbʲɑ lʲʊˈblʲʊ/"). Use the official IPA conventions for the target language. Under 32 chars.
 - Each "target" phrase is also for TTS narration — prefer 2–5 word phrases that sound natural spoken aloud. No quotes around the phrase. End with a period or exclamation.
 - "native" = idiomatic meaning in the user's native language (not literal). Keep under 36 chars so it fits one line.
@@ -3164,7 +3164,7 @@ LANGUAGE_VOCAB_CARD_SYSTEM_PROMPT = """You generate VOCAB CARD content for a sho
 
 ═══ PART 2: THE WORD ═══
 - target_word: ONE word/short phrase in TARGET language script (Cyrillic for ru, Hangul for ko, Hanzi for zh). Include stress marks where the language uses them (Russian: "рыба́лка"; Spanish: "café"). Single word OR a 2-word noun phrase max. Pick something USEFUL and concrete — vocabulary a B1-B2 learner would write down.
-- pronunciation: Latin transliteration friendly to native-lang reader. Hyphens between syllables, UPPER on the stressed syllable. Examples:
+- pronunciation: reader-friendly respelling in the NATIVE reader's conventions (native_lang), NOT always Latin/Vietnamese. Hyphens between syllables, UPPER on the stressed syllable. vi → Vietnamese respelling; en → English respelling; ru → Cyrillic respelling; any other native → IPA. Examples (native en):
     * ru "рыба́лка" → "ry-bAl-ka"
     * de "Verschreibung" → "fer-SHRY-bung"
     * zh "钓鱼" → "diào-yú" (with tone marks for zh — Pinyin standard)
