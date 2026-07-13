@@ -1604,7 +1604,61 @@ _DUP_WINDOW_WHATS_BOARD = 10   # was 8 — pool 12
 _DUP_WINDOW_DIALOGUE = 10      # was 8 — pool 12
 _DUP_WINDOW_FILL_BLANK = 10    # was 8 — pool 12
 _DUP_WINDOW_VOCAB_TABLE = 10   # was 8 — pool 12
-_DUP_WINDOW_COMPARE = 10       # new — pool 12 per lang
+_DUP_WINDOW_COMPARE = 10       # new: pool 12 per lang
+
+# Cross-layout dedup for VISUAL vocab pickers (CEO 2026-07-13). The 5 pickers
+# whats_this, whats_board, guess_word, vocab_card, vocab_table all draw
+# from overlapping visual taxonomies (kitchen, clothes, fruit, stationery...).
+# Each keeps its own per-layout list, but the same "kitchen" theme was landing
+# on the feed 4-5 times via different layouts. This shared window is the
+# cross-cutting dedup: normalize each theme to a core noun and skip any theme
+# whose normalized key was used by ANY visual layout in the last N picks.
+_DUP_WINDOW_VISUAL_GLOBAL = 18
+
+_VISUAL_STRIP_LEADING_TOKENS = (
+    "từ vựng", "loại", "dụng cụ", "đồ dùng", "đồ",
+    "con", "loài", "nghề nghiệp", "nghề", "phương tiện",
+    "nhạc cụ", "lễ hội", "món ăn", "thời tiết", "quần áo",
+    "hoa quả và", "hoa quả",
+)
+
+
+def _normalize_visual_theme(topic: str) -> str:
+    """Extract core noun from a visual theme label for cross-layout dedup.
+
+    Examples:
+      "9 loại rau củ (蔬菜)"          => "rau củ"
+      "8 từ vựng trong nhà bếp"      => "trong nhà bếp"
+      "10 đồ dùng nhà bếp"           => "nhà bếp"
+      "9 đồ nhà bếp (厨房用品)"       => "nhà bếp"
+      "9 dụng cụ học tập (文具)"      => "học tập"
+    """
+    import re as _re
+    t = topic or ""
+    t = _re.sub(r"\s*[\(（][^)）]*[\)）]", "", t)
+    t = _re.sub(r"^\s*\d+\s+", "", t)
+    lowered = t.lower()
+    for tok in sorted(_VISUAL_STRIP_LEADING_TOKENS, key=len, reverse=True):
+        if lowered.startswith(tok + " "):
+            t = t[len(tok) + 1 :]
+            break
+    return _re.sub(r"\s+", " ", t).strip().lower()
+
+
+def _visual_pool_filter(pool, own_used, own_window, state):
+    """Filter pool by own recent + shared visual recent (cross-layout dedup)."""
+    global_used = state.setdefault("used_visual_themes", [])
+    own_ban = set(own_used[-own_window:])
+    global_ban = {_normalize_visual_theme(t) for t in global_used[-_DUP_WINDOW_VISUAL_GLOBAL:]}
+    return [
+        t for t in pool
+        if t not in own_ban and _normalize_visual_theme(t) not in global_ban
+    ]
+
+
+def _visual_track(state, theme):
+    """Append theme to the shared visual-history window."""
+    state.setdefault("used_visual_themes", []).append(theme)
 
 
 def _avoid_recent_hint(used: list[str], current_topic: str, n_show: int = 15) -> str:
@@ -1767,12 +1821,15 @@ def _pick_whats_this(state: dict, target_lang: str, target_lang_name: str) -> tu
     pool = LANGUAGE_WHATS_THIS_THEMES.get(target_lang) or LANGUAGE_WHATS_THIS_THEMES.get("de", [])
     if not pool:
         return _pick_quiz_forward(state, target_lang, target_lang_name)
-    available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_THIS:]]
+    available = _visual_pool_filter(pool, used, _DUP_WINDOW_WHATS_THIS, state)
+    if not available:
+        available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_THIS:]]
     if not available:
         available = pool
         used.clear()
     theme = random.choice(available)
     used.append(theme)
+    _visual_track(state, theme)
     state["last_special_layout"] = "visual"
     base_req = _format_whats_this_request(theme, target_lang_name)
     return base_req + _avoid_recent_hint(used, theme, n_show=8), "whats_this"
@@ -1784,12 +1841,15 @@ def _pick_whats_board(state: dict, target_lang: str, target_lang_name: str) -> t
     pool = LANGUAGE_BOARD_THEMES.get(target_lang) or LANGUAGE_BOARD_THEMES.get("de", [])
     if not pool:
         return _pick_whats_this(state, target_lang, target_lang_name)
-    available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
+    available = _visual_pool_filter(pool, used, _DUP_WINDOW_WHATS_BOARD, state)
+    if not available:
+        available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
     if not available:
         available = pool
         used.clear()
     theme = random.choice(available)
     used.append(theme)
+    _visual_track(state, theme)
     state["last_special_layout"] = "board"
     base_req = _format_whats_board_request(theme, target_lang_name)
     return base_req + _avoid_recent_hint(used, theme, n_show=10), "whats_board"
@@ -1801,12 +1861,15 @@ def _pick_guess_word(state: dict, target_lang: str, target_lang_name: str) -> tu
     pool = LANGUAGE_BOARD_THEMES.get(target_lang) or LANGUAGE_BOARD_THEMES.get("de", [])
     if not pool:
         return _pick_quiz_forward(state, target_lang, target_lang_name)
-    available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
+    available = _visual_pool_filter(pool, used, _DUP_WINDOW_WHATS_BOARD, state)
+    if not available:
+        available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
     if not available:
         available = pool
         used.clear()
     theme = random.choice(available)
     used.append(theme)
+    _visual_track(state, theme)
     state["last_special_layout"] = "guess_word"
     base_req = _format_guess_word_request(theme, target_lang_name)
     return base_req + _avoid_recent_hint(used, theme, n_show=10), "guess_word"
@@ -1824,12 +1887,15 @@ def _pick_vocab_card(state: dict, target_lang: str, target_lang_name: str) -> tu
     pool = LANGUAGE_BOARD_THEMES.get(target_lang) or LANGUAGE_BOARD_THEMES.get("de", [])
     if not pool:
         return _pick_quiz_forward(state, target_lang, target_lang_name)
-    available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
+    available = _visual_pool_filter(pool, used, _DUP_WINDOW_WHATS_BOARD, state)
+    if not available:
+        available = [t for t in pool if t not in used[-_DUP_WINDOW_WHATS_BOARD:]]
     if not available:
         available = pool
         used.clear()
     theme = random.choice(available)
     used.append(theme)
+    _visual_track(state, theme)
     state["last_special_layout"] = "vocab_card"
     base_req = _format_vocab_card_request(theme, target_lang_name)
     return base_req + _avoid_recent_hint(used, theme, n_show=10), "vocab_card"
@@ -1875,12 +1941,15 @@ def _pick_vocab_table(state: dict, target_lang: str, target_lang_name: str) -> t
     pool = LANGUAGE_VOCAB_TABLE_TOPICS.get(target_lang) or LANGUAGE_VOCAB_TABLE_TOPICS.get("de", [])
     if not pool:
         return _pick_fill_blank(state, target_lang, target_lang_name)
-    available = [t for t in pool if t not in used[-_DUP_WINDOW_VOCAB_TABLE:]]
+    available = _visual_pool_filter(pool, used, _DUP_WINDOW_VOCAB_TABLE, state)
+    if not available:
+        available = [t for t in pool if t not in used[-_DUP_WINDOW_VOCAB_TABLE:]]
     if not available:
         available = pool
         used.clear()
     topic = random.choice(available)
     used.append(topic)
+    _visual_track(state, topic)
     state["last_special_layout"] = "vocab_table"
     base_req = _format_vocab_table_request(topic, target_lang_name)
     return base_req + _avoid_recent_hint(used, topic, n_show=10), "vocab_table"
