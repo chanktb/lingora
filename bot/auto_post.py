@@ -1630,6 +1630,23 @@ async def run_once(force: bool = False) -> int:
     )
     log.info("Rendered MP4: %s (%d bytes)", output_mp4, output_mp4.stat().st_size)
 
+    # CEO 2026-07-21: guess_word bg-video composite. HF's stepped virtual clock
+    # freezes <video> at frame 1, so the stock clip is composited AFTER HF via
+    # ffmpeg chromakey + dim + overlay. Template rendered content on solid green
+    # #00ff00; we chromakey it out, overlay onto the looping bg + dim layer.
+    if layout_type == "guess_word":
+        bg_static = job_dir / "static" / "bg.mp4"
+        if bg_static.exists():
+            import stock_video  # type: ignore  # noqa: E402
+            composite_out = job_dir / "output_composited.mp4"
+            try:
+                await stock_video.composite_bg(output_mp4, bg_static, composite_out)
+                output_mp4.unlink(missing_ok=True)
+                composite_out.rename(output_mp4)
+                log.info("guess_word bg composite ok: %d bytes", output_mp4.stat().st_size)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("guess_word bg composite failed, keeping HF-only output: %s", exc)
+
     # ───── Defensive: validate audio stream presence ─────
     # HyperFrames sometimes returns exit 0 but renders video-only MP4 (Chromium
     # audio context bug under high concurrency). If we expected audio but the

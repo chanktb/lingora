@@ -89,6 +89,68 @@ async def _strip_audio(src: Path, dst: Path) -> None:
             )
 
 
+async def composite_bg(
+    hf_output: Path,
+    bg_video: Path,
+    final_out: Path,
+    *,
+    dim: float = 0.55,
+    chroma_similarity: float = 0.22,
+    chroma_blend: float = 0.10,
+) -> Path:
+    """Composite HF output (with #00ff00 chromakey bg) over the looping bg video
+    plus a black dim overlay. HF cannot advance a <video> element under its
+    stepped virtual clock, so realtime playback is deferred to ffmpeg here.
+
+    Filter graph:
+      1. bg.mp4 looped, scaled+center-cropped to 1080x1920, trimmed to HF duration
+      2. black rectangle at opacity `dim` overlaid on bg (readability dim)
+      3. HF output green-keyed (color #00ff00, similarity, blend), then overlaid
+         on the dimmed bg
+      4. Audio from HF output copied to final
+    """
+    hf_output = hf_output.resolve()
+    bg_video = bg_video.resolve()
+    final_out = final_out.resolve()
+
+    if not hf_output.exists():
+        raise FileNotFoundError(f"hf_output missing: {hf_output}")
+    if not bg_video.exists():
+        raise FileNotFoundError(f"bg_video missing: {bg_video}")
+
+    filter_complex = (
+        f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+        f"crop=1080:1920,setsar=1[bgs];"
+        f"[bgs]drawbox=x=0:y=0:w=1080:h=1920:color=black@{dim:.2f}:t=fill[bgd];"
+        f"[1:v]chromakey=color=0x00ff00:similarity={chroma_similarity:.2f}:"
+        f"blend={chroma_blend:.2f}[fg];"
+        f"[bgd][fg]overlay=0:0:shortest=1[out]"
+    )
+
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-stream_loop", "-1", "-i", str(bg_video),
+        "-i", str(hf_output),
+        "-filter_complex", filter_complex,
+        "-map", "[out]", "-map", "1:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        "-shortest",
+        str(final_out),
+    ]
+    log.info("composite_bg: %s", " ".join(cmd[-8:]))
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"composite_bg failed: {err.decode(errors='replace')[-400:]}"
+        )
+    return final_out
+
+
 async def fetch_bg_video(
     query: str,
     dest: Path,

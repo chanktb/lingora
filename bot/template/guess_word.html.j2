@@ -12,9 +12,21 @@
          word card. Text stays legible on any Pexels clip via strong
          text-shadows and a rgba(0,0,0,0.55) dim layer between video and content. */
       * { margin: 0; padding: 0; box-sizing: border-box; }
+      /* When has_bg_video: body = solid green (chromakey #00FF00), HF renders
+         content on green, ffmpeg post-composite chromakeys out and overlays
+         the stock video + dim underneath. HF's stepped virtual clock cannot
+         drive a <video> element, so realtime playback has to happen outside HF.
+         When no bg video: fall back to the pastel gradient (no post-processing). */
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
-        background: #0a0e1a;
+        {% if has_bg_video %}
+        background: #00ff00;
+        {% else %}
+        background:
+          radial-gradient(ellipse 700px 700px at 12% 12%, rgba(255,126,185,0.35), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 88% 88%, rgba(102,187,255,0.30), transparent 60%),
+          linear-gradient(160deg, #1a1230 0%, #221a3b 55%, #0f1a2e 100%);
+        {% endif %}
         font-family: "Be Vietnam Pro", "Inter",
           "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
         color: #fff;
@@ -24,35 +36,6 @@
         top: 0; left: 0;
         width: 1080px; height: 1920px;
       }
-
-      /* Stock video background (audio stripped, muted, looped) */
-      #bg-video {
-        position: absolute; top: 0; left: 0;
-        width: 1080px; height: 1920px;
-        object-fit: cover;
-        z-index: 0;
-      }
-      #bg-fallback {
-        position: absolute; top: 0; left: 0;
-        width: 1080px; height: 1920px;
-        background:
-          radial-gradient(ellipse 700px 700px at 12% 12%, rgba(255,126,185,0.35), transparent 60%),
-          radial-gradient(ellipse 700px 700px at 88% 88%, rgba(102,187,255,0.30), transparent 60%),
-          linear-gradient(160deg, #1a1230 0%, #221a3b 55%, #0f1a2e 100%);
-        z-index: 0;
-      }
-      /* Dim overlay above video, below content: keeps text legible */
-      #bg-dim {
-        position: absolute; top: 0; left: 0;
-        width: 1080px; height: 1920px;
-        background: linear-gradient(180deg,
-          rgba(0,0,0,0.55) 0%,
-          rgba(0,0,0,0.42) 40%,
-          rgba(0,0,0,0.58) 100%);
-        z-index: 1;
-      }
-      /* All HF clips render above the video + dim layers */
-      body > #root { position: relative; z-index: 2; }
 
       #title-native {
         position: absolute;
@@ -330,14 +313,6 @@
     </style>
   </head>
   <body>
-    {% if has_bg_video %}
-    <video id="bg-video" autoplay muted loop playsinline preload="auto">
-      <source src="static/bg.mp4" type="video/mp4" />
-    </video>
-    {% else %}
-    <div id="bg-fallback"></div>
-    {% endif %}
-    <div id="bg-dim"></div>
     <div
       id="root"
       data-composition-id="main"
