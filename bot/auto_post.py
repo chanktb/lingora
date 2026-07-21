@@ -1547,8 +1547,24 @@ async def run_once(force: bool = False) -> int:
             native_lang=intent.native_lang,
         )
     elif layout_type == "guess_word":
-        # Pure typography layout — NO image gen, NO scene. 11 audio clips
-        # (reveal_1..reveal_10 + outro_native) already synthesized above.
+        # CEO 2026-07-21: Pexels stock bg video + glass card. Fetch first,
+        # composer copies to static/bg.mp4; template plays it muted/looped.
+        # If Pexels fails (no key, 4xx, no candidate), composer falls back
+        # to the built-in gradient background so the video still renders.
+        import stock_video  # type: ignore  # noqa: E402
+        bg_dir = job_dir / "stock_bg"
+        bg_dir.mkdir(parents=True, exist_ok=True)
+        bg_path: Path | None = None
+        query = (getattr(content, "stock_video_query", "") or "").strip()
+        if query:
+            log.info("Gen guess_word bg from Pexels: %r", query)
+            try:
+                bg_path = await stock_video.fetch_bg_video(query, bg_dir / "bg.mp4")
+            except Exception as exc:  # noqa: BLE001
+                log.warning("guess_word bg fetch failed: %s", exc)
+                bg_path = None
+        if bg_path is None:
+            log.info("guess_word: falling back to gradient bg (no Pexels clip)")
         composer.build_guess_word_project(
             content=content, audio_clips=clips, audio_src_dir=audio_dir,
             out_dir=job_dir, target_lang_name=intent.target_lang_name,
@@ -1556,6 +1572,7 @@ async def run_once(force: bool = False) -> int:
             native_lang=intent.native_lang,
             lesson_number=int(state.get("post_count", 0)) + 1,
             hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
+            bg_video_path=bg_path,
         )
     elif layout_type == "vocab_card":
         # 1 photorealistic illustration + 2 target-voice clips already synth'd

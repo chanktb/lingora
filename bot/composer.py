@@ -1963,6 +1963,7 @@ def build_guess_word_project(
     channel_dir: Path | None = None,
     native_lang: str = "vi",
     lesson_number: int = 1,
+    bg_video_path: Path | None = None,
 ) -> Path:
     """Materialize a HyperFrames project for the guess_word layout.
 
@@ -2022,6 +2023,13 @@ def build_guess_word_project(
                     has_chime = True
                 if lower == "tick.mp3":
                     has_tick = True
+
+    # CEO 2026-07-21: Pexels stock video as background (audio already stripped).
+    # Copy to static/bg.mp4; template plays it muted/looped behind a dim overlay.
+    has_bg_video = False
+    if bg_video_path and bg_video_path.exists():
+        shutil.copy2(bg_video_path, static_dst / "bg.mp4")
+        has_bg_video = True
 
     # ────── TIMING (no intro voice/card — straight into word 1) ──────
     # CEO 2026-06-16: countdown 3 seconds, integer ticks. Each word:
@@ -2109,6 +2117,7 @@ def build_guess_word_project(
         avatar_emoji=os.environ.get("AVATAR_EMOJI", DEFAULT_AVATAR_EMOJI),
         theme=_theme_from_env(),
         has_logo=has_logo,
+        has_bg_video=has_bg_video,
     )
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 

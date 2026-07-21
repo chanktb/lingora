@@ -8,13 +8,16 @@
       rel="stylesheet"
     />
     <style>
+      /* CEO 2026-07-21 refresh: stock video background + dim overlay + glass
+         word card. Text stays legible on any Pexels clip via strong
+         text-shadows and a rgba(0,0,0,0.55) dim layer between video and content. */
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
-        background: linear-gradient(160deg, #fff7ea 0%, #fde6f0 45%, #e5f1ff 100%);
+        background: #0a0e1a;
         font-family: "Be Vietnam Pro", "Inter",
           "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
-        color: #2b2547;
+        color: #fff;
       }
       .clip {
         position: absolute;
@@ -22,17 +25,34 @@
         width: 1080px; height: 1920px;
       }
 
-      .blob {
-        position: absolute; border-radius: 50%;
-        filter: blur(80px); opacity: 0.55;
-        pointer-events: none;
+      /* Stock video background (audio stripped, muted, looped) */
+      #bg-video {
+        position: absolute; top: 0; left: 0;
+        width: 1080px; height: 1920px;
+        object-fit: cover;
+        z-index: 0;
       }
-      .blob-1 { top: -120px; left: -120px; width: 540px; height: 540px;
-                background: radial-gradient(circle, #ffd2a8 0%, transparent 70%); }
-      .blob-2 { bottom: -100px; right: -120px; width: 500px; height: 500px;
-                background: radial-gradient(circle, #b8dcff 0%, transparent 70%); }
-      .blob-3 { top: 720px; right: -200px; width: 460px; height: 460px;
-                background: radial-gradient(circle, #ffc4d8 0%, transparent 70%); }
+      #bg-fallback {
+        position: absolute; top: 0; left: 0;
+        width: 1080px; height: 1920px;
+        background:
+          radial-gradient(ellipse 700px 700px at 12% 12%, rgba(255,126,185,0.35), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 88% 88%, rgba(102,187,255,0.30), transparent 60%),
+          linear-gradient(160deg, #1a1230 0%, #221a3b 55%, #0f1a2e 100%);
+        z-index: 0;
+      }
+      /* Dim overlay above video, below content: keeps text legible */
+      #bg-dim {
+        position: absolute; top: 0; left: 0;
+        width: 1080px; height: 1920px;
+        background: linear-gradient(180deg,
+          rgba(0,0,0,0.55) 0%,
+          rgba(0,0,0,0.42) 40%,
+          rgba(0,0,0,0.58) 100%);
+        z-index: 1;
+      }
+      /* All HF clips render above the video + dim layers */
+      body > #root { position: relative; z-index: 2; }
 
       #title-native {
         position: absolute;
@@ -40,9 +60,11 @@
         text-align: center;
         font-family: "Be Vietnam Pro", sans-serif;
         font-size: 88px; font-weight: 900;
-        color: #2b2547;
+        color: #ffffff;
         letter-spacing: 1.5px;
         line-height: 1.0;
+        text-shadow: 0 4px 24px rgba(0,0,0,0.75),
+                     0 2px 8px rgba(0,0,0,0.5);
       }
       #title-flags {
         position: absolute;
@@ -53,15 +75,19 @@
       .title-flag {
         display: inline-flex; align-items: center; justify-content: center;
         width: 80px; height: 80px;
-        background: #fff;
+        background: rgba(255,255,255,0.16);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.28);
         border-radius: 50%;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.35);
         font-size: 52px;
       }
       .title-arrow {
         font-family: "Inter", sans-serif;
-        font-size: 44px; color: #ff7eb9;
+        font-size: 44px;
+        color: #fde047;
         font-weight: 900;
+        text-shadow: 0 3px 10px rgba(0,0,0,0.55);
       }
 
       #word-counter {
@@ -70,17 +96,24 @@
         text-align: center;
         font-family: "Inter", sans-serif;
         font-size: 30px; font-weight: 700;
-        color: #ff5d8f; letter-spacing: 6px;
+        color: #fde047;
+        letter-spacing: 6px;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.6);
       }
 
+      /* Glass word card: translucent + backdrop blur so the video shows through
+         but text stays readable. */
       .word-card {
         position: absolute;
         top: 640px; left: 90px; right: 90px;
         height: 430px;
-        background: #fff;
+        background: rgba(20, 20, 40, 0.45);
         border-radius: 44px;
-        box-shadow: 0 20px 50px rgba(124, 90, 168, 0.18);
-        border: 4px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 24px 60px rgba(0,0,0,0.55),
+                    inset 0 0 0 1px rgba(255,255,255,0.14);
+        border: 1px solid rgba(255,255,255,0.20);
+        backdrop-filter: blur(22px) saturate(120%);
+        -webkit-backdrop-filter: blur(22px) saturate(120%);
       }
 
       /* Rows inside card */
@@ -90,8 +123,9 @@
         text-align: center;
         font-family: "Be Vietnam Pro", sans-serif;
         font-size: 56px; font-weight: 900;
-        color: #2b2547;
+        color: #ffffff;
         line-height: 1.0;
+        text-shadow: 0 3px 14px rgba(0,0,0,0.6);
       }
       .r-pos {
         position: absolute;
@@ -99,7 +133,7 @@
         text-align: center;
         font-family: "Inter", sans-serif;
         font-size: 24px; font-weight: 500;
-        color: #9b8bbb;
+        color: rgba(255,255,255,0.7);
         font-style: italic;
         line-height: 1.0;
       }
@@ -109,10 +143,11 @@
         text-align: center;
         font-family: "JetBrains Mono", monospace;
         font-size: 60px; font-weight: 700;
-        color: #5b9bd5;
+        color: #7dd3fc;
         letter-spacing: 4px;
         line-height: 1.0;
         white-space: nowrap;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.65);
       }
       .r-target {
         position: absolute;
@@ -121,9 +156,11 @@
         font-family: "Be Vietnam Pro",
           "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
         font-size: 76px; font-weight: 900;
-        color: #ec4899;
+        color: #fde047;
         line-height: 1.0;
         letter-spacing: 0.5px;
+        text-shadow: 0 4px 18px rgba(0,0,0,0.7),
+                     0 0 26px rgba(253,224,71,0.35);
       }
       .r-time {
         position: absolute;
@@ -134,15 +171,16 @@
         font-weight: 900;
       }
       .r-time .time-label {
-        font-size: 22px; color: #9b8bbb;
+        font-size: 22px; color: rgba(255,255,255,0.7);
         letter-spacing: 4px;
         font-weight: 700;
         vertical-align: middle;
       }
       .r-time .time-num {
-        font-size: 64px; color: #ff5d8f;
+        font-size: 64px; color: #fde047;
         margin-left: 12px;
         vertical-align: middle;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.65);
       }
       .r-ipa {
         position: absolute;
@@ -150,7 +188,7 @@
         text-align: center;
         font-family: "JetBrains Mono", monospace;
         font-size: 28px; font-weight: 500;
-        color: #6b6786;
+        color: rgba(255,255,255,0.72);
         line-height: 1.0;
       }
       .r-example {
@@ -159,8 +197,9 @@
         text-align: center;
         font-family: "Be Vietnam Pro", sans-serif;
         font-size: 40px; font-weight: 600;
-        color: #2b2547;
+        color: #ffffff;
         line-height: 1.18;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.6);
       }
 
       #countdown-bar-wrap {
@@ -170,15 +209,17 @@
       }
       .countdown-bar-track {
         width: 100%; height: 100%;
-        background: rgba(91, 155, 213, 0.18);
+        background: rgba(255,255,255,0.14);
         border-radius: 9px;
         overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.22);
       }
       .countdown-bar-fill {
         height: 100%;
-        background: linear-gradient(90deg, #66bb6a 0%, #ffca28 60%, #ff5d8f 100%);
+        background: linear-gradient(90deg, #66bb6a 0%, #fde047 60%, #ff5d8f 100%);
         border-radius: 9px;
         transform-origin: left center;
+        box-shadow: 0 0 14px rgba(253,224,71,0.55);
       }
 
       #brand-row {
@@ -193,19 +234,23 @@
         display: flex; align-items: center; justify-content: center;
         font-size: 30px;
         overflow: hidden;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.45);
       }
       #brand-row .brand-logo img { width: 100%; height: 100%; object-fit: cover; }
       #brand-row .brand-name {
         font-family: "Be Vietnam Pro", sans-serif;
         font-size: 32px; font-weight: 800;
-        color: #2b2547;
+        color: #ffffff;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.65);
       }
       #tagline {
         position: absolute;
         top: 1565px; left: 0; right: 0;
         text-align: center;
-        font-size: 22px; color: #6b6786;
+        font-size: 22px;
+        color: rgba(255,255,255,0.78);
         font-weight: 500;
+        text-shadow: 0 1px 6px rgba(0,0,0,0.55);
       }
       /* TIME number cycling 3 → 2 → 1 over countdown.
          IMPORTANT (CEO 2026-06-16 bug): animation-delay set INLINE per
@@ -238,7 +283,7 @@
         to   { transform: scaleX(0); }
       }
 
-      /* ───── OUTRO HERO CARD ───── */
+      /* OUTRO HERO CARD (over the same video bg + dim) */
       #outro-emoji {
         position: absolute;
         top: 660px; left: 0; right: 0;
@@ -247,6 +292,7 @@
         line-height: 1.0;
         animation: pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
         animation-fill-mode: both;
+        text-shadow: 0 6px 30px rgba(0,0,0,0.65);
       }
       #outro-badge {
         position: absolute;
@@ -254,13 +300,15 @@
         text-align: center;
         font-family: "Inter", sans-serif;
         font-size: 96px; font-weight: 900;
-        color: #ff5d8f;
+        color: #fde047;
         letter-spacing: 12px;
         line-height: 1.0;
         text-transform: uppercase;
+        text-shadow: 0 5px 22px rgba(0,0,0,0.7),
+                     0 0 30px rgba(253,224,71,0.35);
       }
       #outro-badge .badge-num {
-        color: #2b2547;
+        color: #ffffff;
         margin-right: 18px;
       }
       #outro-cta {
@@ -269,9 +317,10 @@
         text-align: center;
         font-family: "Be Vietnam Pro", sans-serif;
         font-size: 56px; font-weight: 800;
-        color: #2b2547;
+        color: #ffffff;
         line-height: 1.2;
         letter-spacing: 0.5px;
+        text-shadow: 0 4px 18px rgba(0,0,0,0.7);
       }
       @keyframes pop {
         0%   { transform: scale(0.35); opacity: 0; }
@@ -281,6 +330,14 @@
     </style>
   </head>
   <body>
+    {% if has_bg_video %}
+    <video id="bg-video" autoplay muted loop playsinline preload="auto">
+      <source src="static/bg.mp4" type="video/mp4" />
+    </video>
+    {% else %}
+    <div id="bg-fallback"></div>
+    {% endif %}
+    <div id="bg-dim"></div>
     <div
       id="root"
       data-composition-id="main"
@@ -289,9 +346,6 @@
       data-width="1080"
       data-height="1920"
     >
-    <div class="blob blob-1"></div>
-    <div class="blob blob-2"></div>
-    <div class="blob blob-3"></div>
 
     {# Title + flag — ALWAYS visible #}
     <div class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="0">

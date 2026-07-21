@@ -2737,7 +2737,8 @@ class GuessWordContent:
     topic_label: str           # short topic in native ("về tình yêu")
     short_title: str           # rút gọn sticky header line 1
     short_title_target: str    # rút gọn dịch sang target
-    caption: str               # multi-line caption — MUST start with "Luyện từ vựng..." pattern
+    caption: str               # multi-line caption, MUST start with "Luyện từ vựng..." pattern
+    stock_video_query: str = ""  # 2-3 English words for Pexels bg video search (CEO 2026-07-21)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -2805,6 +2806,7 @@ GUESS_WORD_SCHEMA = {
     "required": [
         "intent", "title_native", "words", "intro_native", "outro_native",
         "topic_label", "short_title", "short_title_target", "caption",
+        "stock_video_query",
     ],
     "properties": {
         "intent": {
@@ -2844,6 +2846,7 @@ GUESS_WORD_SCHEMA = {
         "short_title": {"type": "STRING"},
         "short_title_target": {"type": "STRING"},
         "caption": {"type": "STRING"},
+        "stock_video_query": {"type": "STRING"},
     },
 }
 
@@ -2950,6 +2953,25 @@ Multi-line caption for social posts. STRUCTURE STRICTLY:
     * etc. — ONLY use #IELTS when target_lang == "en".
 - NO emojis on line 1. NO em-dash anywhere in the caption.
 - Total under 280 chars.
+
+═══ PART 7: STOCK VIDEO QUERY (CEO 2026-07-21) ═══
+- stock_video_query: 2-3 English keywords describing an ATMOSPHERIC background
+  scene fitting the topic. Used to fetch a portrait 9:16 clip from Pexels
+  Videos, which becomes the video background behind the word cards.
+  KEEP IT SIMPLE, VISUAL, and CINEMATIC (not literal):
+    * topic "tình yêu" / "love"            -> "candlelight romance"
+    * topic "cảm xúc"                        -> "emotional portrait"
+    * topic "đồ nhà bếp" / kitchen           -> "cozy kitchen"
+    * topic "rau củ"                         -> "fresh vegetables"
+    * topic "dụng cụ học tập" / school       -> "study desk"
+    * topic "công việc" / work               -> "modern office"
+    * topic "thiên nhiên"                    -> "misty forest"
+    * topic "thể thao" / sports              -> "gym workout"
+    * topic "âm nhạc"                        -> "music studio"
+    * topic "du lịch"                        -> "airport window"
+  Prefer scenes with GENTLE motion (steam rising, leaves swaying, water
+  flowing, camera slow-pan), NOT chaotic action, NOT people talking to
+  camera. Under 30 chars. Lowercase, no punctuation.
 """
 
 
@@ -3023,6 +3045,7 @@ def parse_and_generate_guess_word(
         short_title=data.get("short_title") or "",
         short_title_target=data.get("short_title_target") or "",
         caption=caption,
+        stock_video_query=(data.get("stock_video_query") or "").strip().lower(),
     )
     return intent, content
 
