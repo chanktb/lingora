@@ -137,6 +137,26 @@
         display: flex; flex-direction: column;
         gap: 12px;
       }
+      /* Highlight overlay for the currently-spoken row. One HF clip per row,
+         positioned exactly over its static row, visible only during that
+         row's voice window (data-start/data-duration). HF stepped clock
+         cannot drive CSS animations reliably but IT DOES honor per-clip
+         time-slicing, which is what we use here.
+         Row-height math (matches .row + gap below):
+           padding 14+14 + content max(62, 46+2+25) + border 2 = ~103
+           row-to-row spacing = 103 + gap 12 = 115
+           row N top = #forms.top(900) + (N-1)*115 */
+      .row-hl {
+        position: absolute;
+        pointer-events: none;
+        left: 90px; right: 90px; height: 103px;
+        border-radius: 18px;
+        border: 3px solid #fde047;
+        box-shadow: 0 0 42px rgba(253,224,71,0.60),
+                    inset 0 0 28px rgba(253,224,71,0.22);
+        background: rgba(253,224,71,0.14);
+      }
+
       .row {
         display: flex; align-items: center;
         padding: 14px 24px;
@@ -218,6 +238,16 @@
         </div>
         {% endfor %}
       </div>
+
+      {# Per-row highlight overlays: visible only while the voice reads
+         that specific row. Positioned in pixel-space matching #forms rows. #}
+      {% for t in form_timings %}
+      <div class="row-hl clip"
+           style="top: {{ 900 + (t.idx - 1) * 115 }}px;"
+           data-start="{{ t.voice_start }}"
+           data-duration="{{ t.voice_duration }}"
+           data-track-index="{{ 30 + t.idx }}"></div>
+      {% endfor %}
 
       {% if use_master_audio %}
       <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/master.wav"></audio>

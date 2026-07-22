@@ -1377,14 +1377,18 @@ async def run_once(force: bool = False) -> int:
             tts.AudioSegment("example", content.example_sentence, voice, rate=target_rate),
         ]
     elif layout_type == "conjugation":
-        # CEO 2026-07-22: target-lang ONLY. 7 clips: verb infinitive + 6 forms.
-        # Slow (-15%) so learner catches stress + syllable of each inflection.
+        # CEO 2026-07-22: read pronoun + conjugated form (e.g. "Я читаю"),
+        # not the form alone. For "он/она" row, voice says the primary
+        # pronoun only (first token before the slash) so TTS doesn't stumble.
+        # 7 clips total: verb infinitive + 6 pronoun+form clips.
         target_rate = _norm_rate(os.environ.get("QUIZ_REVERSE_TARGET_RATE", "-15%"))
         segments = [
             tts.AudioSegment("verb", content.verb_target, voice, rate=target_rate),
         ]
         for i, f in enumerate(content.forms, start=1):
-            segments.append(tts.AudioSegment(f"form_{i}", f.conjugated, voice, rate=target_rate))
+            primary_pn = (f.pronoun or "").split("/")[0].strip()
+            speech = (primary_pn + " " + f.conjugated).strip() if primary_pn else f.conjugated
+            segments.append(tts.AudioSegment(f"form_{i}", speech, voice, rate=target_rate))
     else:
         # phrases layout — VN voice (intro/outro/per-phrase translation) all +30%.
         # Target language phrase stays at base_rate for learning clarity.
