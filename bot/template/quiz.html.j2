@@ -283,6 +283,46 @@
         color: var(--primary-light); opacity: 0.85; letter-spacing: 0.5px;
       }
 
+      {% if has_bg_video %}
+      /* CEO 2026-07-22: bg-video mode. Wrap all floating text/options in
+         solid dark pill boxes so they stay readable over the Pexels bg.
+         Solid #0f1428 avoids chromakey artifacts on rgba surfaces. */
+      #question-text {
+        background: #0f1428;
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 28px;
+        padding: 22px 32px;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+      }
+      .option-box {
+        background: #0f1428 !important;
+        border-color: rgba(255,255,255,0.28) !important;
+      }
+      .option-box.is-active {
+        background: #1a2350 !important;
+        border-color: rgba(255,215,0,0.7) !important;
+      }
+      #brand-row {
+        display: inline-flex; align-items: center;
+        left: 50%; right: auto; transform: translateX(-50%);
+        gap: 14px; padding: 10px 26px 10px 10px;
+        background: #0f1428;
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 999px;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.40);
+      }
+      #tagline {
+        left: 50%; right: auto; transform: translateX(-50%);
+        display: inline-block;
+        padding: 6px 20px;
+        background: #0f1428;
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 999px;
+        color: #fff !important; opacity: 1 !important;
+        width: auto;
+      }
+      {% endif %}
+
       audio.clip { position: absolute; top: -9999px; left: -9999px; }
     </style>
   </head>
