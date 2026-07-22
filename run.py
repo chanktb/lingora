@@ -41,7 +41,8 @@ LAYOUTS = [
     ("fill_blank",    "Fill-blank — one sentence with a missing word + 3 options"),
     ("guess_word",    "Guess-word — reveal target word letter by letter"),
     ("quiz_reverse",  "Reverse quiz — guess the meaning of a phrase"),
-    ("vocab_card",    "Vocab card — 1 word + illustration + multi-language grid"),
+    ("vocab_card",    "Vocab card, 1 word + illustration + multi-language grid"),
+    ("conjugation",   "Conjugation, 1 verb + 6 personal-pronoun forms (RU only)"),
 ]
 
 LANGS = [
@@ -454,6 +455,16 @@ def _build_request(args: argparse.Namespace) -> str:
         return tp._format_guess_word_request(topic, target_lang_name=target_name)
     if layout == "vocab_card":
         return tp._format_vocab_card_request(topic, target_lang_name=target_name)
+    if layout == "conjugation":
+        # topic is an ASCII slug (e.g. "nhan") or Cyrillic infinitive; look up
+        # the matching verb entry so we send the full triple to Gemini. Empty
+        # topic just picks the first verb in the pool.
+        pool = tp._CONJUGATION_VERBS.get(args.lang, [])
+        if not pool:
+            sys.exit(f"conjugation: no verb pool for target_lang={args.lang}")
+        pick = next((v for v in pool if v[2] == topic or v[0] == topic), pool[0])
+        verb_target, verb_native, verb_slug = pick
+        return tp._format_conjugation_request(verb_target, verb_slug, verb_native, target_name)
     if layout == "dialogue":
         return tp._format_dialogue_request(topic, target_lang_name=target_name)
     if layout == "fill_blank":

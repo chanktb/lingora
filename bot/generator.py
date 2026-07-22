@@ -3347,6 +3347,194 @@ def parse_and_generate_vocab_card(
     return intent, content
 
 
+# CONJUGATION layout (CEO 2026-07-22): 1 verb + 6 personal-pronoun forms.
+# See docstrings below. Initial support: Russian only.
+
+
+@dataclass
+class ConjugationForm:
+    pronoun: str
+    conjugated: str
+    pronunciation: str
+
+
+@dataclass
+class ConjugationContent:
+    verb_target: str
+    verb_pronunciation: str
+    verb_native: str
+    aspect_label: str
+    tense_label: str
+    forms: list[ConjugationForm]
+    topic_label: str
+    short_title: str
+    short_title_target: str
+    caption: str
+    scene_image_prompt: str
+
+
+CONJUGATION_SCHEMA = {
+    "type": "OBJECT",
+    "required": [
+        "intent", "verb_target", "verb_pronunciation", "verb_native",
+        "aspect_label", "tense_label", "forms",
+        "topic_label", "short_title", "short_title_target",
+        "caption", "scene_image_prompt",
+    ],
+    "properties": {
+        "intent": {
+            "type": "OBJECT",
+            "required": ["target_lang", "native_lang", "topic", "count",
+                         "voice_gender", "target_lang_name"],
+            "properties": {
+                "target_lang":      {"type": "STRING"},
+                "native_lang":      {"type": "STRING"},
+                "topic":            {"type": "STRING"},
+                "count":            {"type": "INTEGER"},
+                "voice_gender":     {"type": "STRING"},
+                "target_lang_name": {"type": "STRING"},
+            },
+        },
+        "verb_target":         {"type": "STRING"},
+        "verb_pronunciation":  {"type": "STRING"},
+        "verb_native":         {"type": "STRING"},
+        "aspect_label":        {"type": "STRING"},
+        "tense_label":         {"type": "STRING"},
+        "forms": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "required": ["pronoun", "conjugated", "pronunciation"],
+                "properties": {
+                    "pronoun":       {"type": "STRING"},
+                    "conjugated":    {"type": "STRING"},
+                    "pronunciation": {"type": "STRING"},
+                },
+            },
+        },
+        "topic_label":         {"type": "STRING"},
+        "short_title":         {"type": "STRING"},
+        "short_title_target":  {"type": "STRING"},
+        "caption":             {"type": "STRING"},
+        "scene_image_prompt":  {"type": "STRING"},
+    },
+}
+
+
+LANGUAGE_CONJUGATION_SYSTEM_PROMPT = """You generate CONJUGATION content for a short-form vertical (9:16) language-learning video. ONE target-language verb (infinitive with stress mark) plus EXACTLY 6 personal-pronoun conjugated forms in ONE tense. Output strict JSON, no prose.
+
+PART 1: INTENT
+- target_lang: ISO 639-1 of the LEARNED language (start with "ru")
+- native_lang: ISO 639-1 the channel speaks to (e.g. "vi", "en")
+- topic: the verb itself in native lang, e.g. "nhan / to receive", "hoc / to learn"
+- count: ALWAYS 1
+- voice_gender: "male" | "female" | "any"
+- target_lang_name: lang name in native lang ("Nga")
+- layout_type: ALWAYS "conjugation"
+
+PART 2: VERB (infinitive)
+- verb_target: TARGET-LANG infinitive with STRESS MARK where the language uses one. Russian: use acute accent on the stressed vowel, e.g. "получи́ть", "раб́отать", "говор́ить". SINGLE VERB, no phrase. Pick a common B1-level everyday verb.
+- verb_pronunciation: Latin transliteration friendly to a native-lang reader, hyphenated between syllables, UPPERCASE on the stressed syllable, e.g. "получи́ть" gives "pa-lu-CHIT", "раб́отать" gives "ra-BO-tat".
+- verb_native: SHORT native-lang translation. For English: "to receive, to get". For Vietnamese: "nhan, nhan duoc". Under 40 chars.
+- aspect_label: for Russian ONLY, one of "hoàn thành" (perfective) or CHUA_"hoàn thành" (imperfective). For other target langs, use "" (empty).
+- tense_label: the tense the 6 forms are in, in the NATIVE lang. Russian perfective verb: "tưong lai" (future). Russian imperfective verb: "hiện tại" (present). Under 20 chars.
+
+PART 3: FORMS (EXACTLY 6)
+For Russian target_lang, produce these 6 pronouns in this ORDER:
+    1. "я" (I)
+    2. "ты" (you sing.)
+    3. "он/она" (he/she)
+    4. "мы" (we)
+    5. "вы" (you pl. / formal)
+    6. "они" (they)
+
+Each form has:
+- pronoun: exactly the pronoun string above (Cyrillic slash included for row 3)
+- conjugated: the inflected verb WITH STRESS MARK, in TARGET-LANG script.
+- pronunciation: Latin transliteration with syllable hyphens + UPPERCASE stressed syllable, e.g. "pa-lu-CHU", "pa-LU-chish".
+
+PART 4: LABELS
+- topic_label: short native-lang topic, e.g. "về verb".
+- short_title: 1-3 word NATIVE lang, e.g. "Nhận", "Học".
+- short_title_target: TARGET-LANG infinitive with stress, same as verb_target.
+
+PART 5: SCENE
+- scene_image_prompt: ENGLISH description of a background SCENE fitting the verb's semantic field. Used to fetch a Pexels stock video. NO people talking to camera. Prefer GENTLE motion (steam, leaves, water, slow pan). Under 60 chars. Examples:
+    "получи́ть" (to receive): "hands opening a gift box"
+    "раб́отать" (to work): "hands typing on laptop"
+    "говор́ить" (to speak): "coffee shop table conversation"
+    "чит́ать" (to read): "hands turning book pages"
+    "гот́овить" (to cook): "steaming kitchen pan"
+
+PART 6: CAPTION
+Multi-line native-lang caption for social posts.
+- Line 1 opener depends on native_lang: vi+ru "Ngữ pháp tiếng Nga, Chia động từ", en+ru "Russian Grammar, Verb Conjugation".
+- Line 2: state the verb + tense in native lang, e.g. "Học chia động từ verb ở thì tưong lai.".
+- Line 3: 3-5 hashtags, e.g. "#hocTiengNga #ngugoc #chiadongtu"
+- ZERO em-dash. Use commas, periods, colons, parentheses. Total under 260 chars.
+"""
+
+
+def parse_and_generate_conjugation(
+    user_text,
+    *,
+    client=None,
+    model=None,
+):
+    """Generate conjugation content for a 1-verb + 6-form video."""
+    if model is None:
+        model = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
+
+    resp = _call_gemini(client,
+        model=model,
+        contents=user_text,
+        config=types.GenerateContentConfig(
+            system_instruction=LANGUAGE_CONJUGATION_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=CONJUGATION_SCHEMA,
+            temperature=0.7,
+        ),
+    )
+    data = json.loads(resp.text)
+
+    intent_data = data["intent"]
+    intent = ParsedIntent(
+        target_lang=intent_data["target_lang"].lower(),
+        native_lang=intent_data.get("native_lang", "vi").lower(),
+        topic=intent_data["topic"],
+        count=1,
+        voice_gender=(intent_data.get("voice_gender") or "any").lower(),
+        target_lang_name=intent_data["target_lang_name"],
+        layout_type="conjugation",
+    )
+
+    forms_raw = data.get("forms") or []
+    if len(forms_raw) != 6:
+        raise ValueError(f"conjugation must have exactly 6 forms, got {len(forms_raw)}")
+    forms = [ConjugationForm(**f) for f in forms_raw]
+
+    caption_raw = (data.get("caption") or "").strip()
+    caption_raw = caption_raw.replace(chr(0x2014), ",").replace(chr(0x2013), ",")
+    caption = _sanitize_hashtags(caption_raw)
+    caption = _ensure_seo_hashtag(caption, intent.target_lang)
+
+    content = ConjugationContent(
+        verb_target=data["verb_target"],
+        verb_pronunciation=data.get("verb_pronunciation", ""),
+        verb_native=data.get("verb_native", ""),
+        aspect_label=data.get("aspect_label", ""),
+        tense_label=data.get("tense_label", ""),
+        forms=forms,
+        topic_label=data.get("topic_label", ""),
+        short_title=data.get("short_title", ""),
+        short_title_target=data.get("short_title_target", "") or data["verb_target"],
+        caption=caption,
+        scene_image_prompt=data.get("scene_image_prompt", ""),
+    )
+    return intent, content
+
+
+
 if __name__ == "__main__":
     import sys
 

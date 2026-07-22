@@ -21,6 +21,7 @@ from generator import (
     CompareContent, ComparePair,
     GuessWordContent, GuessWord,
     VocabCardContent, VocabCardTranslation,
+    ConjugationContent, ConjugationForm,
     _LANG_FLAG,
 )
 from tts import AudioClip
@@ -2387,6 +2388,197 @@ def build_vocab_card_project(
         "example_highlight": content.example_highlight,
         "translations": [{"lang_code": t.lang_code, "text": t.text}
                          for t in content.translations],
+        "caption": content.caption,
+    }
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return out_dir
+
+
+# CONJUGATION layout (CEO 2026-07-22): 1 verb + 6 personal-pronoun forms.
+# Voice: verb (slow), then form_1..form_6 (slow). BG = Pexels stock video.
+
+def build_conjugation_project(
+    *,
+    content: ConjugationContent,
+    audio_clips: list[AudioClip],
+    audio_src_dir: Path,
+    out_dir: Path,
+    target_lang_name: str = "",
+    hyperframes_version: str = "0.6.52",
+    channel_dir: Path | None = None,
+    native_lang: str = "vi",
+    bg_video_path: Path | None = None,
+) -> Path:
+    """Materialize a HyperFrames project for the conjugation layout.
+
+    Audio: exactly 7 target-language clips: `verb`, `form_1` .. `form_6`.
+    Timing per form: chime + voice + small pad. Highlight rendered STATICALLY
+    (all 6 rows visible from start) since HF stepped clock cannot drive
+    timed CSS animations reliably. Voice guides viewer through the list.
+    """
+    if len(audio_clips) != 7:
+        raise ValueError("conjugation expects 7 audio clips, got " + str(len(audio_clips)))
+    if len(content.forms) != 6:
+        raise ValueError("conjugation expects 6 forms, got " + str(len(content.forms)))
+
+    clip_by_name = {c.name: c for c in audio_clips}
+    verb_clip = clip_by_name["verb"]
+    form_clips = [clip_by_name["form_" + str(i)] for i in range(1, 7)]
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    assets_audio = out_dir / "assets" / "audio"
+    assets_audio.mkdir(parents=True, exist_ok=True)
+    for clip in audio_clips:
+        shutil.copy2(audio_src_dir / clip.file, assets_audio / clip.file)
+
+    static_dst = out_dir / "static"
+    static_dst.mkdir(parents=True, exist_ok=True)
+    has_logo = False
+    has_chime = False
+    ASSET_EXTS = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".mp3", ".wav"}
+    layers: list[Path] = [TEMPLATE_DIR / "static"]
+    if channel_dir is not None:
+        layers.append(channel_dir / "static")
+    for layer in layers:
+        if not layer.exists():
+            continue
+        for f in layer.iterdir():
+            if f.is_file() and f.suffix.lower() in ASSET_EXTS:
+                shutil.copy2(f, static_dst / f.name)
+                if f.name.lower() == "logo.png":
+                    has_logo = True
+                if f.name.lower() == "chime.mp3":
+                    has_chime = True
+
+    # Optional Pexels bg (composited post-HF via ffmpeg chromakey).
+    has_bg_video = False
+    if bg_video_path and bg_video_path.exists():
+        shutil.copy2(bg_video_path, static_dst / "bg.mp4")
+        has_bg_video = True
+
+    # Timing
+    verb_chime_start = 0.05
+    verb_audio_start = round(verb_chime_start + CHIME_DURATION + 0.05, 2)
+    verb_dur = verb_clip.duration
+    cursor = round(verb_audio_start + verb_dur + 0.6, 2)
+
+    form_timings = []
+    for i, fc in enumerate(form_clips, start=1):
+        chime_start = round(cursor, 2)
+        voice_start = round(chime_start + CHIME_DURATION + 0.05, 2)
+        voice_dur = fc.duration
+        form_timings.append({
+            "idx": i,
+            "chime_start": chime_start,
+            "voice_start": voice_start,
+            "voice_duration": round(voice_dur + 0.1, 2),
+        })
+        cursor = round(voice_start + voice_dur + 0.35, 2)
+
+    HOLD_TAIL = 1.2
+    total_duration = round(cursor + HOLD_TAIL, 2)
+
+    # Master premix (single-track audio) when chime.mp3 is available.
+    use_master_audio = False
+    if has_chime:
+        chime_path = static_dst / "chime.mp3"
+        premix_clips: list[tuple[Path, float, float]] = [
+            (chime_path, verb_chime_start, 0.85),
+            (assets_audio / verb_clip.file, verb_audio_start, 1.0),
+        ]
+        for fc, t in zip(form_clips, form_timings):
+            premix_clips.append((chime_path, t["chime_start"], 0.75))
+            premix_clips.append((assets_audio / fc.file, t["voice_start"], 1.0))
+        master_path = assets_audio / "master.wav"
+        if _premix_audio_track(
+            out_path=master_path,
+            total_duration=total_duration,
+            clips=premix_clips,
+        ):
+            use_master_audio = True
+
+    # Render rows with pronoun + conjugated + pronunciation.
+    rows = []
+    for i, form in enumerate(content.forms, start=1):
+        rows.append({
+            "idx": i,
+            "pronoun": form.pronoun,
+            "conjugated": form.conjugated,
+            "pronunciation": form.pronunciation,
+        })
+
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        autoescape=select_autoescape(["html"]),
+    )
+    template = env.get_template("conjugation.html.j2")
+    html = template.render(
+        demo_mode=_demo_mode(),
+        total_duration=total_duration,
+        verb_target=content.verb_target,
+        verb_pronunciation=content.verb_pronunciation,
+        verb_native=content.verb_native,
+        aspect_label=content.aspect_label,
+        tense_label=content.tense_label,
+        rows=rows,
+        # Audio timings
+        use_master_audio=use_master_audio,
+        verb_chime_start=verb_chime_start,
+        verb_audio_start=verb_audio_start,
+        verb_audio_duration=round(verb_dur + 0.1, 2),
+        form_timings=form_timings,
+        has_chime=has_chime,
+        # Chrome + theme
+        channel_name=os.environ.get("CHANNEL_NAME", DEFAULT_CHANNEL_NAME),
+        avatar_emoji=os.environ.get("AVATAR_EMOJI", DEFAULT_AVATAR_EMOJI),
+        has_logo=has_logo,
+        has_bg_video=has_bg_video,
+        theme=_theme_from_env(),
+        native_lang=native_lang,
+        target_lang_name=target_lang_name or "",
+    )
+    (out_dir / "index.html").write_text(html, encoding="utf-8")
+
+    (out_dir / "meta.json").write_text(
+        json.dumps({"id": out_dir.name, "name": out_dir.name}, indent=2),
+        encoding="utf-8",
+    )
+    (out_dir / "hyperframes.json").write_text(
+        json.dumps({
+            "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
+            "registry": "https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry",
+            "paths": {"blocks": "compositions",
+                      "components": "compositions/components",
+                      "assets": "assets"},
+        }, indent=2),
+        encoding="utf-8",
+    )
+    (out_dir / "package.json").write_text(
+        json.dumps({
+            "name": out_dir.name, "private": True, "type": "module",
+            "scripts": {
+                "render": f"npx --yes hyperframes@{hyperframes_version} render",
+                "lint":   f"npx --yes hyperframes@{hyperframes_version} lint",
+            },
+        }, indent=2),
+        encoding="utf-8",
+    )
+
+    manifest = {
+        "layout_type": "conjugation",
+        "total_duration": total_duration,
+        "verb_target": content.verb_target,
+        "verb_pronunciation": content.verb_pronunciation,
+        "verb_native": content.verb_native,
+        "tense_label": content.tense_label,
+        "aspect_label": content.aspect_label,
+        "forms": [{"pronoun": f.pronoun, "conjugated": f.conjugated,
+                   "pronunciation": f.pronunciation}
+                  for f in content.forms],
         "caption": content.caption,
     }
     (out_dir / "manifest.json").write_text(

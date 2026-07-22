@@ -88,7 +88,7 @@ JOBS_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = CHANNEL_DIR / "auto_post_state.json"
 
 # CEO 2026-07-22: layouts that use Pexels stock video as bg (composited post-HF).
-BG_VIDEO_LAYOUTS = {"guess_word", "phrases", "quiz", "quiz_reverse", "fill_blank"}
+BG_VIDEO_LAYOUTS = {"guess_word", "phrases", "quiz", "quiz_reverse", "fill_blank", "conjugation"}
 
 
 async def _maybe_fetch_bg_video(scene_prompt: str, job_dir: Path, label: str) -> Path | None:
@@ -1161,6 +1161,10 @@ async def run_once(force: bool = False) -> int:
         intent, content = await asyncio.to_thread(
             generator.parse_and_generate_vocab_card, request_text,
         )
+    elif layout_type == "conjugation":
+        intent, content = await asyncio.to_thread(
+            generator.parse_and_generate_conjugation, request_text,
+        )
     else:
         intent, content = await asyncio.to_thread(
             generator.parse_and_generate, request_text, niche=niche,
@@ -1372,6 +1376,15 @@ async def run_once(force: bool = False) -> int:
             tts.AudioSegment("word", content.target_word, voice, rate=target_rate),
             tts.AudioSegment("example", content.example_sentence, voice, rate=target_rate),
         ]
+    elif layout_type == "conjugation":
+        # CEO 2026-07-22: target-lang ONLY. 7 clips: verb infinitive + 6 forms.
+        # Slow (-15%) so learner catches stress + syllable of each inflection.
+        target_rate = _norm_rate(os.environ.get("QUIZ_REVERSE_TARGET_RATE", "-15%"))
+        segments = [
+            tts.AudioSegment("verb", content.verb_target, voice, rate=target_rate),
+        ]
+        for i, f in enumerate(content.forms, start=1):
+            segments.append(tts.AudioSegment(f"form_{i}", f.conjugated, voice, rate=target_rate))
     else:
         # phrases layout — VN voice (intro/outro/per-phrase translation) all +30%.
         # Target language phrase stays at base_rate for learning clarity.
@@ -1625,6 +1638,17 @@ async def run_once(force: bool = False) -> int:
             out_dir=job_dir, target_lang_name=intent.target_lang_name,
             hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
             native_lang=intent.native_lang,
+        )
+    elif layout_type == "conjugation":
+        # CEO 2026-07-22: 1 verb + 6 personal-pronoun forms. Bg = Pexels stock
+        # video (composited post-HF via chromakey). No AI scene image needed.
+        bg_path = await _maybe_fetch_bg_video(content.scene_image_prompt, job_dir, "conjugation")
+        composer.build_conjugation_project(
+            content=content, audio_clips=clips, audio_src_dir=audio_dir,
+            out_dir=job_dir, target_lang_name=intent.target_lang_name,
+            hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
+            native_lang=intent.native_lang,
+            bg_video_path=bg_path,
         )
     else:
         # phrases layout: fetch Pexels bg (composited post-HF); scene image kept

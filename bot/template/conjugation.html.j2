@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* CEO 2026-07-22 conjugation layout: verb + 6 personal-pronoun forms.
+         has_bg_video: body = #00ff00 chromakey, drop scene-related divs;
+         ffmpeg composites Pexels bg + dim underneath post-HF. Else render on
+         dark gradient. Text stays legible with strong shadows either way. */
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        {% if has_bg_video %}
+        background: #00ff00;
+        {% else %}
+        background:
+          radial-gradient(ellipse 700px 700px at 12% 12%, rgba(126,203,255,0.30), transparent 60%),
+          radial-gradient(ellipse 700px 700px at 88% 88%, rgba(253,224,71,0.22), transparent 60%),
+          linear-gradient(160deg, #0f1a2e 0%, #1a1230 55%, #12102a 100%);
+        {% endif %}
+        font-family: "Be Vietnam Pro", "Inter",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        color: #fff;
+      }
+      .clip { position: absolute; }
+
+      /* Brand chip: park in TOP UNSAFE band (bottom <= 285), visible only in
+         full view. Chip stays outside 4:5 feed crop the same way as vocab_card. */
+      #brand {
+        top: 200px; left: 90px;
+        display: flex; align-items: center; gap: 14px;
+        padding: 8px 22px 8px 8px;
+        background: rgba(255,255,255,0.14);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 999px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 26px; font-weight: 800;
+        color: #fff;
+        max-width: 620px;
+      }
+      .brand-dot {
+        width: 52px; height: 52px; border-radius: 50%;
+        background: linear-gradient(135deg, #7ecbff, #fde047);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 26px; line-height: 1;
+        overflow: hidden;
+      }
+      .brand-dot img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+      /* Tense / aspect chips at top of INNER zone. */
+      #chips {
+        top: 360px; left: 90px; right: 90px;
+        display: flex; align-items: center; justify-content: center;
+        gap: 14px;
+      }
+      .chip {
+        display: inline-flex; align-items: center;
+        padding: 10px 22px;
+        background: rgba(253,224,71,0.14);
+        border: 1px solid rgba(253,224,71,0.55);
+        border-radius: 12px;
+        font-family: "Inter", sans-serif;
+        font-size: 26px; font-weight: 700;
+        letter-spacing: 1px;
+        color: #fde047;
+        text-transform: uppercase;
+      }
+      .chip.chip-aspect {
+        background: rgba(126,203,255,0.14);
+        border-color: rgba(126,203,255,0.55);
+        color: #7ecbff;
+      }
+
+      /* Verb card: infinitive + pronunciation + native translation. */
+      #verb-card {
+        top: 440px; left: 90px; right: 90px;
+        padding: 34px 32px 30px;
+        background: rgba(20, 20, 40, 0.55);
+        border-radius: 32px;
+        border: 1px solid rgba(255,255,255,0.22);
+        box-shadow: 0 24px 60px rgba(0,0,0,0.55),
+                    inset 0 0 0 1px rgba(255,255,255,0.10);
+        backdrop-filter: blur(22px) saturate(120%);
+        -webkit-backdrop-filter: blur(22px) saturate(120%);
+        text-align: center;
+      }
+      #verb-target {
+        font-family: "Be Vietnam Pro",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+        font-size: 116px; font-weight: 900; line-height: 1;
+        letter-spacing: -1px;
+        color: #ffffff;
+        text-shadow: 0 6px 26px rgba(0,0,0,0.7),
+                     0 0 28px rgba(126,203,255,0.28);
+      }
+      #verb-target.verb-long { font-size: 92px; }
+      #verb-target.verb-xlong { font-size: 74px; }
+      #verb-pron {
+        margin-top: 14px;
+        display: inline-block;
+        padding: 8px 24px;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 10px;
+        font-family: "JetBrains Mono", "Inter", monospace;
+        font-size: 30px; font-weight: 600;
+        letter-spacing: 1.5px;
+        color: rgba(255,255,255,0.88);
+      }
+      #verb-native {
+        margin-top: 18px;
+        font-family: "Be Vietnam Pro", sans-serif;
+        font-size: 40px; font-weight: 700;
+        color: #fde047;
+        line-height: 1.15;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.55);
+      }
+
+      /* 6-row conjugation stack. */
+      #forms {
+        top: 900px; left: 90px; right: 90px;
+        display: flex; flex-direction: column;
+        gap: 12px;
+      }
+      .row {
+        display: flex; align-items: center;
+        padding: 14px 24px;
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 18px;
+        min-height: 62px;
+        font-family: "Be Vietnam Pro", "Inter",
+                     "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+                     "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
+      }
+      .row-pronoun {
+        flex: 0 0 200px;
+        font-size: 40px; font-weight: 800;
+        color: #7ecbff;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+      }
+      .row-body {
+        flex: 1;
+        display: flex; flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+      }
+      .row-conjugated {
+        font-size: 44px; font-weight: 900;
+        color: #ffffff;
+        line-height: 1.05;
+        text-shadow: 0 3px 14px rgba(0,0,0,0.65);
+      }
+      .row-pron {
+        font-family: "JetBrains Mono", "Inter", monospace;
+        font-size: 22px; font-weight: 500;
+        color: rgba(255,255,255,0.62);
+        letter-spacing: 0.6px;
+      }
+
+      audio.clip { position: absolute; top: -9999px; left: -9999px; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{ total_duration }}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div id="brand" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1">
+        <div class="brand-dot">
+          {% if has_logo %}<img src="static/logo.png" alt="" />{% else %}<span>{{ avatar_emoji }}</span>{% endif %}
+        </div>
+        <span>{{ channel_name }}</span>
+      </div>
+
+      <div id="chips" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="2">
+        {% if tense_label %}<span class="chip">{{ tense_label }}</span>{% endif %}
+        {% if aspect_label %}<span class="chip chip-aspect">{{ aspect_label }}</span>{% endif %}
+      </div>
+
+      <div id="verb-card" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="3">
+        <div id="verb-target" class="{% if verb_target|length > 14 %}verb-xlong{% elif verb_target|length > 10 %}verb-long{% endif %}">{{ verb_target }}</div>
+        {% if verb_pronunciation %}<div id="verb-pron">[{{ verb_pronunciation }}]</div>{% endif %}
+        {% if verb_native %}<div id="verb-native">{{ verb_native }}</div>{% endif %}
+      </div>
+
+      <div id="forms" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="4">
+        {% for r in rows %}
+        <div class="row">
+          <div class="row-pronoun">{{ r.pronoun }}</div>
+          <div class="row-body">
+            <div class="row-conjugated">{{ r.conjugated }}</div>
+            {% if r.pronunciation %}<div class="row-pron">[{{ r.pronunciation }}]</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if use_master_audio %}
+      <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/master.wav"></audio>
+      {% else %}
+      {% if has_chime %}
+      <audio id="chime-verb" class="clip" data-start="{{ verb_chime_start }}" data-duration="0.5" data-track-index="8" data-volume="0.85" src="static/chime.mp3"></audio>
+      {% endif %}
+      <audio id="audio-verb" class="clip" data-start="{{ verb_audio_start }}" data-duration="{{ verb_audio_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/verb.wav"></audio>
+      {% for t in form_timings %}
+      {% if has_chime %}
+      <audio id="chime-f{{ t.idx }}" class="clip" data-start="{{ t.chime_start }}" data-duration="0.5" data-track-index="{{ 8 + t.idx }}" data-volume="0.75" src="static/chime.mp3"></audio>
+      {% endif %}
+      <audio id="audio-f{{ t.idx }}" class="clip" data-start="{{ t.voice_start }}" data-duration="{{ t.voice_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/form_{{ t.idx }}.wav"></audio>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </body>
+</html>

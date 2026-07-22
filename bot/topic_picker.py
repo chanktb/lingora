@@ -1584,7 +1584,7 @@ _SPECIAL_LAYOUTS = [
 _ALL_LAYOUTS = [
     "phrases", "quiz", "quiz_reverse", "whats_this", "whats_board",
     "dialogue", "fill_blank", "vocab_table", "compare", "guess_word",
-    "vocab_card",
+    "vocab_card", "conjugation",
 ]
 
 
@@ -1760,6 +1760,7 @@ def pick_next_request(
         "compare":      _pick_compare,
         "guess_word":   _pick_guess_word,
         "vocab_card":   _pick_vocab_card,
+        "conjugation":  _pick_conjugation,
     }
     picker = PICKERS.get(next_layout, _pick_phrases)
     return picker(state, target_lang, target_lang_name)
@@ -1970,3 +1971,77 @@ def _pick_compare(state: dict, target_lang: str, target_lang_name: str) -> tuple
     state["last_special_layout"] = "compare"
     base_req = _format_compare_request(topic, target_lang_name)
     return base_req + _avoid_recent_hint(used, topic, n_show=10), "compare"
+
+
+_CONJUGATION_VERBS = {
+    "ru": [
+    ("получи́ть", "to receive", "nhan"),
+    ("рабо́тать", "to work", "lam viec"),
+    ("говори́ть", "to speak", "noi"),
+    ("чита́ть", "to read", "doc"),
+    ("гото́вить", "to cook", "nau an"),
+    ("смотре́ть", "to watch", "xem"),
+    ("писа́ть", "to write", "viet"),
+    ("изуча́ть", "to study", "hoc"),
+    ("думать", "to think", "nghi"),
+    ("жить", "to live", "song"),
+    ("люби́ть", "to love", "yeu"),
+    ("хоте́ть", "to want", "muon"),
+    ("делать", "to do", "lam"),
+    ("идти", "to go on foot", "di"),
+    ("ехать", "to go by transport", "di xe"),
+    ("мочь", "to be able (can)", "co the"),
+    ("видеть", "to see", "thay"),
+    ("слышать", "to hear", "nghe"),
+    ("спрашивать", "to ask", "hoi"),
+    ("отвеча́ть", "to answer", "tra loi"),
+    ("понима́ть", "to understand", "hieu"),
+    ("иска́ть", "to search", "tim"),
+    ("найти", "to find", "tim thay"),
+    ("дать", "to give", "dua"),
+    ("взять", "to take", "cam lay"),
+    ],
+}
+
+
+def _format_conjugation_request(verb_target, verb_slug, verb_native, target_lang_name):
+    """Format a Gemini request for conjugation content.
+
+    verb_target: infinitive with stress mark (e.g. RU infinitive with acute).
+    verb_slug: ASCII slug for the verb, used in the topic string for tracking.
+    verb_native: English gloss (e.g. "to receive").
+    """
+    return (
+        "Conjugation card, EXACTLY 6 personal-pronoun forms in ONE tense for the "
+        + target_lang_name + " verb "
+        + repr(verb_target)
+        + " (" + verb_native + "). Pronouns MUST be I / you sing. / he-she / we / "
+        + "you pl. / they. Include the STRESS MARK on the stressed vowel of the "
+        + "infinitive AND of every conjugated form. Give a native-lang tense label "
+        + "and a semantic scene_image_prompt (2-3 English words for Pexels video)."
+    )
+
+
+def _pick_conjugation(state, target_lang, target_lang_name):
+    """Pick a verb from the target-lang pool and return (request_text, 'conjugation').
+
+    Initial support: Russian only. Other targets fall back to phrases (CJK verbs
+    do not conjugate by person). Uses ``used_conjugation_verbs`` state list for
+    anti-dup (window 10 out of ~25 verbs = 3 days before repeat).
+    """
+    pool = _CONJUGATION_VERBS.get(target_lang)
+    if not pool:
+        return _pick_phrases(state, target_lang, target_lang_name)
+    used = state.setdefault("used_conjugation_verbs", [])
+    # Tuple order: (verb_target, english_gloss, ascii_slug). Track by slug.
+    available = [v for v in pool if v[2] not in used[-10:]]
+    if not available:
+        available = pool
+        used.clear()
+    # Tuple order in _CONJUGATION_VERBS: (verb_target, english_gloss, ascii_slug)
+    verb_target, verb_native, verb_slug = random.choice(available)
+    used.append(verb_slug)
+    state["last_special_layout"] = "conjugation"
+    base_req = _format_conjugation_request(verb_target, verb_slug, verb_native, target_lang_name)
+    return base_req + _avoid_recent_hint(used, verb_slug, n_show=8), "conjugation"
+
