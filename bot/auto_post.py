@@ -1381,13 +1381,19 @@ async def run_once(force: bool = False) -> int:
         # not the form alone. For "он/она" row, voice says the primary
         # pronoun only (first token before the slash) so TTS doesn't stumble.
         # 7 clips total: verb infinitive + 6 pronoun+form clips.
+        # STRIP stress marks (U+0301 acute, U+0300 grave) from the TTS input:
+        # Edge TTS treats the combining diacritic as a phoneme boundary hint
+        # and mispronounces the word. Display text keeps the mark for the
+        # learner; only the spoken text is stripped.
+        _strip_stress = lambda s: (s or "").replace(chr(0x0301), "").replace(chr(0x0300), "")
         target_rate = _norm_rate(os.environ.get("QUIZ_REVERSE_TARGET_RATE", "-15%"))
         segments = [
-            tts.AudioSegment("verb", content.verb_target, voice, rate=target_rate),
+            tts.AudioSegment("verb", _strip_stress(content.verb_target), voice, rate=target_rate),
         ]
         for i, f in enumerate(content.forms, start=1):
             primary_pn = (f.pronoun or "").split("/")[0].strip()
-            speech = (primary_pn + " " + f.conjugated).strip() if primary_pn else f.conjugated
+            spoken_form = _strip_stress(f.conjugated)
+            speech = (primary_pn + " " + spoken_form).strip() if primary_pn else spoken_form
             segments.append(tts.AudioSegment(f"form_{i}", speech, voice, rate=target_rate))
     else:
         # phrases layout — VN voice (intro/outro/per-phrase translation) all +30%.
