@@ -286,17 +286,20 @@
       {% if has_bg_video %}
       /* CEO 2026-07-22: bg-video mode. Wrap all floating text/options in
          solid dark pill boxes so they stay readable over the Pexels bg.
-         Solid #0f1428 avoids chromakey artifacts on rgba surfaces. */
+         Solid #0f1428 avoids chromakey artifacts on rgba surfaces.
+         padding-top extra (48px) so Vietnamese tone marks (dấu ~ ` ' ?)
+         never touch the top border. */
       #question-text {
         background: #0f1428;
         border: 1px solid rgba(255,255,255,0.20);
         border-radius: 28px;
-        padding: 22px 32px;
+        padding: 48px 36px 40px;
         box-shadow: 0 16px 40px rgba(0,0,0,0.45);
       }
       .option-box {
         background: #0f1428 !important;
         border-color: rgba(255,255,255,0.28) !important;
+        padding: 34px 28px !important;
       }
       .option-box.is-active {
         background: #1a2350 !important;

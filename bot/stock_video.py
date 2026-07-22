@@ -124,29 +124,22 @@ async def composite_bg(
     bg_video: Path,
     final_out: Path,
     *,
-    dim: float = 0.15,
+    dim: float = 0.0,
     chroma_similarity: float = 0.14,
     chroma_blend: float = 0.10,
     chroma_color: str = "0x00ff00",
 ) -> Path:
     """Composite HF output over looping bg video, chromakeying out the body bg.
 
-    CEO 2026-07-22: chroma color switched from #00ff00 to #ff00ff (magenta).
-    Templates draw rgba(dark, 0.7) pill boxes over the chromakey body: with
-    green, the blended pixels sat close enough to pure green that chromakey
-    ate them and destroyed the translucency. With magenta, the blend goes
-    to purple-navy which is far from pure magenta, so chromakey only removes
-    the true magenta background and the box's semi-transparent bg survives.
-
-    dim=0.15 default (was 0.55 -> 0.20). Enough for a subtle mood shift on
-    bright bg videos; templates carry the readability weight via their
-    translucent pill boxes.
+    CEO 2026-07-22 (round 2): dim removed by default. Templates already draw
+    solid #0f1428 pill boxes over the chromakey body (readability lives in
+    the boxes, not in a dark veil). Keeping the Pexels clip fully saturated
+    makes the frame look alive instead of funereal.
 
     Filter graph:
       1. bg.mp4 looped, scaled+center-cropped to 1080x1920, trimmed to HF duration
-      2. black rectangle at opacity `dim` (light shade)
-      3. HF output chroma-keyed against `chroma_color` (default magenta),
-         then overlaid on the dimmed bg
+      2. optional dim step ONLY when dim > 0 (skipped by default)
+      3. HF output chroma-keyed against `chroma_color`, overlaid on bg
       4. Audio from HF output copied to final
     """
     hf_output = hf_output.resolve()
@@ -158,13 +151,25 @@ async def composite_bg(
     if not bg_video.exists():
         raise FileNotFoundError(f"bg_video missing: {bg_video}")
 
+    bg_prep = (
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920,setsar=1"
+    )
+    if dim > 0:
+        bg_stage = (
+            f"{bg_prep}[bgs];"
+            f"[bgs]drawbox=x=0:y=0:w=1080:h=1920:color=black@{dim:.2f}:t=fill[bgd];"
+        )
+        bg_label = "bgd"
+    else:
+        bg_stage = f"{bg_prep}[bgd];"
+        bg_label = "bgd"
+
     filter_complex = (
-        f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-        f"crop=1080:1920,setsar=1[bgs];"
-        f"[bgs]drawbox=x=0:y=0:w=1080:h=1920:color=black@{dim:.2f}:t=fill[bgd];"
+        f"{bg_stage}"
         f"[1:v]chromakey=color={chroma_color}:similarity={chroma_similarity:.2f}:"
         f"blend={chroma_blend:.2f}[fg];"
-        f"[bgd][fg]overlay=0:0:shortest=1[out]"
+        f"[{bg_label}][fg]overlay=0:0:shortest=1[out]"
     )
 
     cmd = [
