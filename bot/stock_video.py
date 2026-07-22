@@ -124,17 +124,22 @@ async def composite_bg(
     bg_video: Path,
     final_out: Path,
     *,
-    dim: float = 0.55,
+    dim: float = 0.20,
     chroma_similarity: float = 0.22,
     chroma_blend: float = 0.10,
 ) -> Path:
     """Composite HF output (with #00ff00 chromakey bg) over the looping bg video
-    plus a black dim overlay. HF cannot advance a <video> element under its
+    plus a light dim overlay. HF cannot advance a <video> element under its
     stepped virtual clock, so realtime playback is deferred to ffmpeg here.
+
+    dim=0.20 default (was 0.55). CEO 2026-07-22: heavy dim made backgrounds
+    look funereal. Templates now supply their own translucent boxes around
+    floating text; the dim is only a light shade to keep chromakey edges
+    from popping too hard on light backgrounds.
 
     Filter graph:
       1. bg.mp4 looped, scaled+center-cropped to 1080x1920, trimmed to HF duration
-      2. black rectangle at opacity `dim` overlaid on bg (readability dim)
+      2. black rectangle at opacity `dim` overlaid on bg (light shade)
       3. HF output green-keyed (color #00ff00, similarity, blend), then overlaid
          on the dimmed bg
       4. Audio from HF output copied to final

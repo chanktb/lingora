@@ -37,15 +37,31 @@
         width: 1080px; height: 1920px;
       }
 
+      /* CEO 2026-07-22: floating text now sits in solid dark pills so the bg
+         video keeps its natural color while text stays readable. Solid bg
+         (not rgba) avoids the green-tint artifact chromakey would leave on
+         translucent boxes rendered over the #00ff00 body. */
       #title-native {
         position: absolute;
         top: 340px; left: 90px; right: 90px;
         text-align: center;
+        padding: 18px 40px;
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
+        background: rgba(15, 20, 40, 0.72);
+        backdrop-filter: blur(18px) saturate(120%);
+        -webkit-backdrop-filter: blur(18px) saturate(120%);
+        {% endif %}
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 28px;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.45),
+                    inset 0 0 0 1px rgba(255,255,255,0.10);
         font-family: "Be Vietnam Pro", sans-serif;
-        font-size: 88px; font-weight: 900;
+        font-size: 80px; font-weight: 900;
         color: #ffffff;
         letter-spacing: 1.5px;
-        line-height: 1.0;
+        line-height: 1.05;
         text-shadow: 0 4px 24px rgba(0,0,0,0.75),
                      0 2px 8px rgba(0,0,0,0.5);
       }
@@ -73,15 +89,30 @@
         text-shadow: 0 3px 10px rgba(0,0,0,0.55);
       }
 
-      #word-counter {
+      /* Counter uses a flex-centered parent so the div auto-sizes to content
+         and can be styled as a pill. */
+      .counter-wrap {
         position: absolute;
         top: 580px; left: 0; right: 0;
-        text-align: center;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #word-counter {
+        display: inline-block;
+        padding: 8px 22px;
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
+        background: rgba(15, 20, 40, 0.72);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        {% endif %}
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 999px;
         font-family: "Inter", sans-serif;
         font-size: 30px; font-weight: 700;
         color: #fde047;
         letter-spacing: 6px;
-        text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+        text-shadow: 0 2px 6px rgba(0,0,0,0.6);
       }
 
       /* Glass word card: translucent + backdrop blur so the video shows through
@@ -90,13 +121,17 @@
         position: absolute;
         top: 640px; left: 90px; right: 90px;
         height: 430px;
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
         background: rgba(20, 20, 40, 0.45);
+        backdrop-filter: blur(22px) saturate(120%);
+        -webkit-backdrop-filter: blur(22px) saturate(120%);
+        {% endif %}
         border-radius: 44px;
         box-shadow: 0 24px 60px rgba(0,0,0,0.55),
                     inset 0 0 0 1px rgba(255,255,255,0.14);
         border: 1px solid rgba(255,255,255,0.20);
-        backdrop-filter: blur(22px) saturate(120%);
-        -webkit-backdrop-filter: blur(22px) saturate(120%);
       }
 
       /* Rows inside card */
@@ -205,35 +240,61 @@
         box-shadow: 0 0 14px rgba(253,224,71,0.55);
       }
 
-      #brand-row {
+      /* Brand row now sits inside a glass pill so it reads over the bg video
+         without needing a global dim. */
+      .brand-wrap {
         position: absolute;
-        top: 1500px; left: 90px; right: 90px;
+        top: 1500px; left: 0; right: 0;
         display: flex; align-items: center; justify-content: center;
-        gap: 18px;
+      }
+      #brand-row {
+        display: inline-flex; align-items: center;
+        gap: 14px;
+        padding: 10px 24px 10px 10px;
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
+        background: rgba(15, 20, 40, 0.72);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        {% endif %}
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: 999px;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.40);
       }
       #brand-row .brand-logo {
-        width: 56px; height: 56px; border-radius: 50%;
+        width: 52px; height: 52px; border-radius: 50%;
         background: linear-gradient(135deg, #ffb88b, #ff7eb9);
         display: flex; align-items: center; justify-content: center;
-        font-size: 30px;
+        font-size: 28px;
         overflow: hidden;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.45);
       }
       #brand-row .brand-logo img { width: 100%; height: 100%; object-fit: cover; }
       #brand-row .brand-name {
         font-family: "Be Vietnam Pro", sans-serif;
-        font-size: 32px; font-weight: 800;
+        font-size: 30px; font-weight: 800;
         color: #ffffff;
-        text-shadow: 0 2px 8px rgba(0,0,0,0.65);
+      }
+      .tagline-wrap {
+        position: absolute;
+        top: 1585px; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
       }
       #tagline {
-        position: absolute;
-        top: 1565px; left: 0; right: 0;
-        text-align: center;
-        font-size: 22px;
-        color: rgba(255,255,255,0.78);
+        display: inline-block;
+        padding: 6px 18px;
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
+        background: rgba(15, 20, 40, 0.68);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        {% endif %}
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 999px;
+        font-size: 20px;
+        color: rgba(255,255,255,0.92);
         font-weight: 500;
-        text-shadow: 0 1px 6px rgba(0,0,0,0.55);
       }
       /* TIME number cycling 3 → 2 → 1 over countdown.
          IMPORTANT (CEO 2026-06-16 bug): animation-delay set INLINE per
@@ -335,20 +396,22 @@
     {# Brand row + tagline + footer — always visible #}
     {% if not demo_mode %}
     <div class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="1">
-      <div id="brand-row">
-        <div class="brand-logo">
-          {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span>{{ avatar_emoji }}</span>{% endif %}
+      <div class="brand-wrap">
+        <div id="brand-row">
+          <div class="brand-logo">
+            {% if has_logo %}<img src="static/logo.png" alt="logo" />{% else %}<span>{{ avatar_emoji }}</span>{% endif %}
+          </div>
+          <span class="brand-name">{{ channel_name }}</span>
         </div>
-        <span class="brand-name">{{ channel_name }}</span>
       </div>
-      {% if channel_tagline %}<div id="tagline">{{ channel_tagline }}</div>{% endif %}
+      {% if channel_tagline %}<div class="tagline-wrap"><div id="tagline">{{ channel_tagline }}</div></div>{% endif %}
     </div>
     {% endif %}
 
     {% for w in words %}
     {# ───── HINT PHASE — ALL rows in ONE clip ───── #}
     <div class="clip" data-start="{{ w.start }}" data-duration="{{ w.countdown_duration }}" data-track-index="3">
-      <div id="word-counter">{{ w.idx }} / {{ words|length }}</div>
+      <div class="counter-wrap"><div id="word-counter">{{ w.idx }} / {{ words|length }}</div></div>
       <div class="word-card">
         <div class="r-native">{{ w.native_translation }}</div>
         <div class="r-pos">({{ w.part_of_speech_label }})</div>
@@ -369,7 +432,7 @@
 
     {# ───── REVEAL PHASE — ALL rows in ONE clip ───── #}
     <div class="clip" data-start="{{ w.reveal_start }}" data-duration="{{ w.reveal_slot }}" data-track-index="3">
-      <div id="word-counter">{{ w.idx }} / {{ words|length }}</div>
+      <div class="counter-wrap"><div id="word-counter">{{ w.idx }} / {{ words|length }}</div></div>
       <div class="word-card">
         <div class="r-native">{{ w.native_translation }}</div>
         <div class="r-pos">({{ w.part_of_speech_label }})</div>
