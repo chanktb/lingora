@@ -274,6 +274,7 @@ def build_project(
     channel_dir: Path | None = None,
     image_src_dir: Path | None = None,
     post_number: int = 0,
+    bg_video_path: Path | None = None,
 ) -> Path:
     """Materialize a HyperFrames project at out_dir, ready for `npm run render`.
 
@@ -319,12 +320,20 @@ def build_project(
                 if f.name.lower() == "chime.mp3":
                     has_chime = True
 
-    # AI-generated background scene (best-effort — fallback gradient if missing)
+    # AI-generated background scene (best-effort, fallback gradient if missing)
     if image_src_dir is not None:
         scene_src = image_src_dir / "scene.png"
         if scene_src.exists():
             shutil.copy2(scene_src, static_dst / "scene.png")
             has_scene = True
+
+    # CEO 2026-07-22: Pexels stock bg video (composited post-HF via chromakey).
+    # When present, template body switches to #00ff00 chromakey and drops the
+    # scene <img>; caller runs stock_video.composite_bg after renderer.render.
+    has_bg_video = False
+    if bg_video_path and bg_video_path.exists():
+        shutil.copy2(bg_video_path, static_dst / "bg.mp4")
+        has_bg_video = True
 
     # ────────────────── TIMING ──────────────────
     # Intro section: chime → intro_vi voice
@@ -444,6 +453,7 @@ def build_project(
         has_logo=has_logo,
         has_chime=has_chime,
         has_scene=has_scene,
+        has_bg_video=has_bg_video,
     )
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 
@@ -540,6 +550,7 @@ def build_quiz_project(
     direction: str = "forward",
     image_src_dir: Path | None = None,
     native_lang: str = "vi",
+    bg_video_path: Path | None = None,
 ) -> Path:
     """Materialize a quiz HyperFrames project.
 
@@ -589,12 +600,18 @@ def build_quiz_project(
                 if f.name.lower() == "chime.mp3":
                     has_chime = True
 
-    # AI-generated background scene (best-effort — fallback to gradient if missing)
+    # AI-generated background scene (best-effort, fallback to gradient if missing)
     if image_src_dir is not None:
         scene_src = image_src_dir / "scene.png"
         if scene_src.exists():
             shutil.copy2(scene_src, static_dst / "scene.png")
             has_scene = True
+
+    # CEO 2026-07-22: Pexels stock bg video (composited post-HF via chromakey).
+    has_bg_video = False
+    if bg_video_path and bg_video_path.exists():
+        shutil.copy2(bg_video_path, static_dst / "bg.mp4")
+        has_bg_video = True
 
     # ────── TIMING ──────
     # Intro: short hook (chime + intro_vi voice)
@@ -704,6 +721,7 @@ def build_quiz_project(
         has_logo=has_logo,
         has_chime=has_chime,
         has_scene=has_scene,
+        has_bg_video=has_bg_video,
         chime_duration=round(CHIME_DURATION, 2),
     )
     (out_dir / "index.html").write_text(html, encoding="utf-8")
@@ -1476,6 +1494,7 @@ def build_fill_blank_project(
     native_lang: str = "vi",
     audio_clips: list[AudioClip] | None = None,
     audio_src_dir: Path | None = None,
+    bg_video_path: Path | None = None,
 ) -> Path:
     """Materialize a HyperFrames project for fill_blank.
 
@@ -1519,6 +1538,12 @@ def build_fill_blank_project(
     if not scene_src.exists():
         raise FileNotFoundError(f"Missing scene image: {scene_src}")
     shutil.copy2(scene_src, static_dst / "scene.png")
+
+    # CEO 2026-07-22: Pexels stock bg video (composited post-HF via chromakey).
+    has_bg_video = False
+    if bg_video_path and bg_video_path.exists():
+        shutil.copy2(bg_video_path, static_dst / "bg.mp4")
+        has_bg_video = True
 
     options_timing: list[FillBlankOptionTiming] = []
     intro: dict = {}
@@ -1638,6 +1663,7 @@ def build_fill_blank_project(
         theme=_theme_from_env(),
         has_logo=has_logo,
         has_chime=has_chime,
+        has_bg_video=has_bg_video,
     )
     (out_dir / "index.html").write_text(html, encoding="utf-8")
 

@@ -21,17 +21,26 @@
         --primary-rgb:    {{ theme.primary_shadow_rgb }};
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
+      /* CEO 2026-07-22: has_bg_video -> body = #00ff00 chromakey, #scene hidden.
+         Post-HF ffmpeg chromakeys out green and overlays looping Pexels clip + dim. */
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
+        {% if has_bg_video %}
+        background: #00ff00;
+        {% else %}
         background: #0a0e27;
+        {% endif %}
         font-family: "Inter", "Be Vietnam Pro",
           "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR",
           "Noto Sans SC", "Noto Sans JP", "Noto Sans KR", sans-serif;
         color: #fff;
       }
+      {% if has_bg_video %}
+      #scene, #scene-overlay { display: none !important; }
+      {% endif %}
       .clip { position: absolute; }
 
-      /* PHOTO SCENE — full screen 4:5 */
+      /* PHOTO SCENE, full screen 4:5 */
       #scene { top: 0; left: 0; width: 1080px; height: 1920px; overflow: hidden; }
       #scene img { width: 100%; height: 100%; object-fit: cover; }
       #scene-overlay {

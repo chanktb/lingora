@@ -23,11 +23,21 @@
         --primary-rgb:    {{ theme.primary_shadow_rgb }};
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
+      /* CEO 2026-07-22: has_bg_video -> body = #00ff00 chromakey, #bg hidden.
+         Post-HF ffmpeg chromakeys out green and overlays looping Pexels clip + dim. */
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
-        background: #0a0e27; font-family: "Inter", "Be Vietnam Pro", sans-serif;
+        {% if has_bg_video %}
+        background: #00ff00;
+        {% else %}
+        background: #0a0e27;
+        {% endif %}
+        font-family: "Inter", "Be Vietnam Pro", sans-serif;
         color: #fff;
       }
+      {% if has_bg_video %}
+      #bg, .grain, .vignette { display: none !important; }
+      {% endif %}
       #bg {
         position: absolute; inset: 0;
         background:

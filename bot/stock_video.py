@@ -89,6 +89,36 @@ async def _strip_audio(src: Path, dst: Path) -> None:
             )
 
 
+_SCENE_STYLE_HINTS_TO_STRIP = (
+    "illustration style", "cartoon style", "cinematic style",
+    "photorealistic", "photo realistic",
+    ", warm lighting", ", soft lighting", ", cozy lighting",
+    ", golden hour", ", natural lighting",
+    ", cozy", ", warm", ", modern", ", elegant",
+)
+
+
+def scene_prompt_to_pexels_query(scene_prompt: str, *, max_len: int = 60) -> str:
+    """Turn a Gemini scene_image_prompt into a short Pexels search query.
+
+    Gemini emits English scene descriptors like
+      "modern Berlin office interior with desks and computers, illustration style"
+    Pexels treats the query as a bag of keywords, so we strip AI style hints
+    that would poison stock-video matching (nothing on Pexels is tagged
+    'illustration style'), collapse whitespace, and cap length. Falls back to
+    'landscape' when the prompt is empty.
+    """
+    q = (scene_prompt or "").strip().lower()
+    if not q:
+        return "landscape"
+    for hint in _SCENE_STYLE_HINTS_TO_STRIP:
+        q = q.replace(hint, "")
+    q = " ".join(q.split()).strip(" ,.;")
+    if len(q) > max_len:
+        q = q[:max_len].rsplit(" ", 1)[0].strip(" ,.;")
+    return q or "landscape"
+
+
 async def composite_bg(
     hf_output: Path,
     bg_video: Path,

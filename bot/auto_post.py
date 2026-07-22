@@ -87,6 +87,26 @@ JOBS_DIR = CHANNEL_DIR / "jobs"
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 STATE_FILE = CHANNEL_DIR / "auto_post_state.json"
 
+# CEO 2026-07-22: layouts that use Pexels stock video as bg (composited post-HF).
+BG_VIDEO_LAYOUTS = {"guess_word", "phrases", "quiz", "quiz_reverse", "fill_blank"}
+
+
+async def _maybe_fetch_bg_video(scene_prompt: str, job_dir: Path, label: str) -> Path | None:
+    """Fetch a Pexels bg video from a Gemini scene_image_prompt. Never raises."""
+    import stock_video  # type: ignore  # noqa: E402
+    query = stock_video.scene_prompt_to_pexels_query(scene_prompt or "")
+    if not query or query == "landscape":
+        log.info("%s: skip Pexels bg (empty scene prompt)", label)
+        return None
+    bg_dir = job_dir / "stock_bg"
+    bg_dir.mkdir(parents=True, exist_ok=True)
+    log.info("%s: Pexels bg query=%r", label, query)
+    try:
+        return await stock_video.fetch_bg_video(query, bg_dir / "bg.mp4")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("%s: Pexels fetch failed: %s", label, exc)
+        return None
+
 # Rate-limit the "CF quota exhausted → skipping turn" heads-up so we don't spam
 # the Telegram group every timer tick while quota is globally out.
 QUOTA_SKIP_NOTIFY_FILE = CHANNEL_DIR / ".quota_skip_notify_ts"
@@ -1368,16 +1388,18 @@ async def run_once(force: bool = False) -> int:
     # 5. Compose + render
     hf_ver = os.environ.get("HYPERFRAMES_VERSION", "0.6.52")
     if layout_type in ("quiz", "quiz_reverse"):
-        # Quiz layouts — gen 1 background scene image (best-effort, fallback no-scene)
+        # Quiz layouts: fetch Pexels bg (composited post-HF); scene image kept
+        # as fallback for the pre-refresh path if bg fetch fails.
         scene_dir = job_dir / "ai_images"
         scene_dir.mkdir(parents=True, exist_ok=True)
         scene_prompt = getattr(content, "scene_image_prompt", "") or ""
-        if scene_prompt.strip():
+        bg_path = await _maybe_fetch_bg_video(scene_prompt, job_dir, layout_type)
+        if bg_path is None and scene_prompt.strip():
             try:
                 await image_gen.gen_image(scene_prompt, scene_dir / "scene.png")
-                log.info("Quiz scene image gen OK")
+                log.info("Quiz scene image gen OK (fallback path)")
             except Exception as exc:  # noqa: BLE001
-                log.warning("Quiz scene image gen failed (fallback no-scene): %s", exc)
+                log.warning("Quiz scene image gen failed: %s", exc)
         composer.build_quiz_project(
             content=content, audio_clips=clips, audio_src_dir=audio_dir,
             out_dir=job_dir, target_lang_name=intent.target_lang_name,
@@ -1385,6 +1407,7 @@ async def run_once(force: bool = False) -> int:
             direction="reverse" if layout_type == "quiz_reverse" else "forward",
             image_src_dir=scene_dir,
             native_lang=intent.native_lang,
+            bg_video_path=bg_path,
         )
     elif layout_type == "whats_this":
         # 5a. Generate 10 AI images via Cloudflare Workers AI (FLUX)
@@ -1503,6 +1526,7 @@ async def run_once(force: bool = False) -> int:
                 f"💥 <code>{str(exc)[:300]}</code>"
             )
             return 1
+        bg_path = await _maybe_fetch_bg_video(content.scene_image_prompt, job_dir, "fill_blank")
         composer.build_fill_blank_project(
             content=content,
             image_src_dir=image_dir,
@@ -1511,6 +1535,7 @@ async def run_once(force: bool = False) -> int:
             native_lang=intent.native_lang,
             audio_clips=clips,
             audio_src_dir=audio_dir,
+            bg_video_path=bg_path,
         )
     elif layout_type == "vocab_table":
         # v4: Gen full photorealistic scene (like fill_blank) instead of small icon.
@@ -1602,16 +1627,18 @@ async def run_once(force: bool = False) -> int:
             native_lang=intent.native_lang,
         )
     else:
-        # phrases layout — generate 1 background scene image (best-effort, fallback to no-scene if fails)
+        # phrases layout: fetch Pexels bg (composited post-HF); scene image kept
+        # as fallback path if Pexels fails.
         scene_dir = job_dir / "ai_images"
         scene_dir.mkdir(parents=True, exist_ok=True)
         scene_prompt = getattr(content, "scene_image_prompt", "") or ""
-        if scene_prompt.strip():
+        bg_path = await _maybe_fetch_bg_video(scene_prompt, job_dir, "phrases")
+        if bg_path is None and scene_prompt.strip():
             try:
                 await image_gen.gen_image(scene_prompt, scene_dir / "scene.png")
-                log.info("Phrases scene image gen OK")
+                log.info("Phrases scene image gen OK (fallback path)")
             except Exception as exc:  # noqa: BLE001
-                log.warning("Phrases scene image gen failed (fallback no-scene): %s", exc)
+                log.warning("Phrases scene image gen failed: %s", exc)
         composer.build_project(
             content=content, audio_clips=clips, audio_src_dir=audio_dir,
             out_dir=job_dir,
@@ -1619,9 +1646,8 @@ async def run_once(force: bool = False) -> int:
             target_lang_name=intent.target_lang_name,
             hyperframes_version=hf_ver, channel_dir=CHANNEL_DIR,
             image_src_dir=scene_dir,
-            # Next-post number for the "HỌC TIẾNG X · BÀI #N" intro chip.
-            # state["post_count"] is still the OLD count here; the new one is +1.
             post_number=int(state.get("post_count", 0)) + 1,
+            bg_video_path=bg_path,
         )
 
     output_mp4 = job_dir / "output.mp4"
@@ -1630,11 +1656,12 @@ async def run_once(force: bool = False) -> int:
     )
     log.info("Rendered MP4: %s (%d bytes)", output_mp4, output_mp4.stat().st_size)
 
-    # CEO 2026-07-21: guess_word bg-video composite. HF's stepped virtual clock
-    # freezes <video> at frame 1, so the stock clip is composited AFTER HF via
-    # ffmpeg chromakey + dim + overlay. Template rendered content on solid green
-    # #00ff00; we chromakey it out, overlay onto the looping bg + dim layer.
-    if layout_type == "guess_word":
+    # CEO 2026-07-21: bg-video composite for layouts in BG_VIDEO_LAYOUTS. HF's
+    # stepped virtual clock freezes <video> at frame 1, so the stock clip is
+    # composited AFTER HF via ffmpeg chromakey + dim + overlay. Templates
+    # rendered content on solid green #00ff00; we chromakey it out, overlay
+    # onto the looping bg + dim layer.
+    if layout_type in BG_VIDEO_LAYOUTS:
         bg_static = job_dir / "static" / "bg.mp4"
         if bg_static.exists():
             import stock_video  # type: ignore  # noqa: E402
@@ -1643,9 +1670,9 @@ async def run_once(force: bool = False) -> int:
                 await stock_video.composite_bg(output_mp4, bg_static, composite_out)
                 output_mp4.unlink(missing_ok=True)
                 composite_out.rename(output_mp4)
-                log.info("guess_word bg composite ok: %d bytes", output_mp4.stat().st_size)
+                log.info("%s bg composite ok: %d bytes", layout_type, output_mp4.stat().st_size)
             except Exception as exc:  # noqa: BLE001
-                log.warning("guess_word bg composite failed, keeping HF-only output: %s", exc)
+                log.warning("%s bg composite failed, keeping HF-only output: %s", layout_type, exc)
 
     # ───── Defensive: validate audio stream presence ─────
     # HyperFrames sometimes returns exit 0 but renders video-only MP4 (Chromium
