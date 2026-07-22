@@ -78,17 +78,24 @@
         color: #7ecbff;
       }
 
-      /* Verb card: infinitive + pronunciation + native translation. */
+      /* Verb card: infinitive + pronunciation + native translation.
+         Solid (not rgba) so it doesn't blend with the #00ff00 chromakey body
+         when has_bg_video is set (else the card gets a green tint that
+         partially survives chromakey removal). */
       #verb-card {
         top: 440px; left: 90px; right: 90px;
         padding: 34px 32px 30px;
-        background: rgba(20, 20, 40, 0.55);
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
+        background: rgba(15, 20, 40, 0.85);
+        backdrop-filter: blur(22px) saturate(120%);
+        -webkit-backdrop-filter: blur(22px) saturate(120%);
+        {% endif %}
         border-radius: 32px;
         border: 1px solid rgba(255,255,255,0.22);
         box-shadow: 0 24px 60px rgba(0,0,0,0.55),
                     inset 0 0 0 1px rgba(255,255,255,0.10);
-        backdrop-filter: blur(22px) saturate(120%);
-        -webkit-backdrop-filter: blur(22px) saturate(120%);
         text-align: center;
       }
       #verb-target {
@@ -133,7 +140,11 @@
       .row {
         display: flex; align-items: center;
         padding: 14px 24px;
+        {% if has_bg_video %}
+        background: #0f1428;
+        {% else %}
         background: rgba(255,255,255,0.07);
+        {% endif %}
         border: 1px solid rgba(255,255,255,0.16);
         border-radius: 18px;
         min-height: 62px;
