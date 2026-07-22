@@ -23,12 +23,12 @@
         --primary-rgb:    {{ theme.primary_shadow_rgb }};
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      /* CEO 2026-07-22: has_bg_video -> body = #00ff00 chromakey, #bg hidden.
+      /* CEO 2026-07-22: has_bg_video -> body = #ff00ff chromakey, #bg hidden.
          Post-HF ffmpeg chromakeys out green and overlays looping Pexels clip + dim. */
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
         {% if has_bg_video %}
-        background: #00ff00;
+        background: #ff00ff;
         {% else %}
         background: #0a0e27;
         {% endif %}
