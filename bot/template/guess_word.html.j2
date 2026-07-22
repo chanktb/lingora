@@ -12,7 +12,7 @@
          word card. Text stays legible on any Pexels clip via strong
          text-shadows and a rgba(0,0,0,0.55) dim layer between video and content. */
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      /* When has_bg_video: body = solid green (chromakey #FF00FF), HF renders
+      /* When has_bg_video: body = solid green (chromakey #00FF00), HF renders
          content on green, ffmpeg post-composite chromakeys out and overlays
          the stock video + dim underneath. HF's stepped virtual clock cannot
          drive a <video> element, so realtime playback has to happen outside HF.
@@ -20,7 +20,7 @@
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
         {% if has_bg_video %}
-        background: #ff00ff;
+        background: #00ff00;
         {% else %}
         background:
           radial-gradient(ellipse 700px 700px at 12% 12%, rgba(255,126,185,0.35), transparent 60%),
@@ -40,7 +40,7 @@
       /* CEO 2026-07-22: floating text now sits in solid dark pills so the bg
          video keeps its natural color while text stays readable. Solid bg
          (not rgba) avoids the green-tint artifact chromakey would leave on
-         translucent boxes rendered over the #ff00ff body. */
+         translucent boxes rendered over the #00ff00 body. */
       #title-native {
         position: absolute;
         top: 340px; left: 90px; right: 90px;

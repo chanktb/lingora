@@ -125,9 +125,9 @@ async def composite_bg(
     final_out: Path,
     *,
     dim: float = 0.15,
-    chroma_similarity: float = 0.10,
-    chroma_blend: float = 0.06,
-    chroma_color: str = "0xff00ff",
+    chroma_similarity: float = 0.14,
+    chroma_blend: float = 0.10,
+    chroma_color: str = "0x00ff00",
 ) -> Path:
     """Composite HF output over looping bg video, chromakeying out the body bg.
 

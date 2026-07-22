@@ -9,14 +9,14 @@
     />
     <style>
       /* CEO 2026-07-22 conjugation layout: verb + 6 personal-pronoun forms.
-         has_bg_video: body = #ff00ff chromakey, drop scene-related divs;
+         has_bg_video: body = #00ff00 chromakey, drop scene-related divs;
          ffmpeg composites Pexels bg + dim underneath post-HF. Else render on
          dark gradient. Text stays legible with strong shadows either way. */
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
         margin: 0; width: 1080px; height: 1920px; overflow: hidden;
         {% if has_bg_video %}
-        background: #ff00ff;
+        background: #00ff00;
         {% else %}
         background:
           radial-gradient(ellipse 700px 700px at 12% 12%, rgba(126,203,255,0.30), transparent 60%),
@@ -79,7 +79,7 @@
       }
 
       /* Verb card: infinitive + pronunciation + native translation.
-         Solid (not rgba) so it doesn't blend with the #ff00ff chromakey body
+         Solid (not rgba) so it doesn't blend with the #00ff00 chromakey body
          when has_bg_video is set (else the card gets a green tint that
          partially survives chromakey removal). */
       #verb-card {
