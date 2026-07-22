@@ -239,15 +239,45 @@
         {% endfor %}
       </div>
 
-      {# Per-row highlight overlays: visible only while the voice reads
-         that specific row. Positioned in pixel-space matching #forms rows. #}
+      {# Per-row highlight overlays: visible only while the voice reads that
+         specific row. HF hardcodes data-start at parse, but position is
+         computed by JS below from actual .row bounding rects so it stays
+         correct even when rows change height (with vs without pronunciation
+         line, wrapped text, different fonts, etc). #}
       {% for t in form_timings %}
       <div class="row-hl clip"
-           style="top: {{ 900 + (t.idx - 1) * 115 }}px;"
+           data-hl-idx="{{ t.idx }}"
+           style="top: 0; height: 0;"
            data-start="{{ t.voice_start }}"
            data-duration="{{ t.voice_duration }}"
            data-track-index="{{ 30 + t.idx }}"></div>
       {% endfor %}
+
+      <script>
+        (function alignHighlights() {
+          function measure() {
+            var rows = document.querySelectorAll('#forms .row');
+            var overlays = document.querySelectorAll('.row-hl[data-hl-idx]');
+            overlays.forEach(function (ov) {
+              var i = parseInt(ov.getAttribute('data-hl-idx'), 10) - 1;
+              var row = rows[i];
+              if (!row) return;
+              var r = row.getBoundingClientRect();
+              ov.style.top = r.top + 'px';
+              ov.style.height = r.height + 'px';
+            });
+          }
+          // Run at least once after fonts/layout settle. HF captures frames
+          // after DOMContentLoaded + one paint tick; run in load AND rAF.
+          if (document.readyState === 'complete') {
+            requestAnimationFrame(measure);
+          } else {
+            window.addEventListener('load', function () {
+              requestAnimationFrame(measure);
+            });
+          }
+        })();
+      </script>
 
       {% if use_master_audio %}
       <audio id="audio-master" class="clip" data-start="0" data-duration="{{ total_duration }}" data-track-index="7" data-volume="1.0" src="assets/audio/master.wav"></audio>
