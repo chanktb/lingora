@@ -3435,9 +3435,19 @@ PART 1: INTENT
 PART 2: VERB (infinitive)
 - verb_target: TARGET-LANG infinitive with STRESS MARK where the language uses one. Russian: use acute accent on the stressed vowel, e.g. "получи́ть", "раб́отать", "говор́ить". SINGLE VERB, no phrase. Pick a common B1-level everyday verb.
 - verb_pronunciation: Latin transliteration friendly to a native-lang reader, hyphenated between syllables, UPPERCASE on the stressed syllable, e.g. "получи́ть" gives "pa-lu-CHIT", "раб́отать" gives "ra-BO-tat".
-- verb_native: SHORT native-lang translation. For English: "to receive, to get". For Vietnamese: "nhan, nhan duoc". Under 40 chars.
-- aspect_label: for Russian ONLY, one of "hoàn thành" (perfective) or CHUA_"hoàn thành" (imperfective). For other target langs, use "" (empty).
-- tense_label: the tense the 6 forms are in, in the NATIVE lang. Russian perfective verb: "tưong lai" (future). Russian imperfective verb: "hiện tại" (present). Under 20 chars.
+- verb_native: SHORT translation of the infinitive INTO THE NATIVE LANG. Under 40 chars.
+    native=en example (verb получи́ть): "to receive, to get"
+    native=vi example (verb получи́ть): "nhận, nhận được"
+    NEVER emit Vietnamese when native_lang=="en", NEVER emit English when native_lang=="vi".
+- aspect_label: for Russian target ONLY, aspect chip STRICTLY IN THE NATIVE LANG. For non-Russian targets, use "" (empty).
+    native=en: "Perfective" (perfective verb) or "Imperfective" (imperfective verb)
+    native=vi: "hoàn thành" (perfective) or "chưa hoàn thành" (imperfective)
+- tense_label: tense of the 6 forms, STRICTLY IN THE NATIVE LANG. Under 20 chars.
+    native=en, Russian perfective verb (points to future): "Future"
+    native=en, Russian imperfective verb: "Present"
+    native=vi, Russian perfective verb: "tương lai"
+    native=vi, Russian imperfective verb: "hiện tại"
+    Both labels must match native_lang. Never mix languages inside one chip.
 
 PART 3: FORMS (EXACTLY 6)
 For Russian target_lang, produce these 6 pronouns in this ORDER:
@@ -3454,8 +3464,12 @@ Each form has:
 - pronunciation: Latin transliteration with syllable hyphens + UPPERCASE stressed syllable, e.g. "pa-lu-CHU", "pa-LU-chish".
 
 PART 4: LABELS
-- topic_label: short native-lang topic, e.g. "về verb".
-- short_title: 1-3 word NATIVE lang, e.g. "Nhận", "Học".
+- topic_label: short label STRICTLY IN THE NATIVE LANG.
+    native=en example: "verb of the day"
+    native=vi example: "về verb"
+- short_title: 1-3 word single word STRICTLY IN THE NATIVE LANG (translation of the verb).
+    native=en example: "Receive", "Study"
+    native=vi example: "Nhận", "Học"
 - short_title_target: TARGET-LANG infinitive with stress, same as verb_target.
 
 PART 5: SCENE
@@ -3467,10 +3481,16 @@ PART 5: SCENE
     "гот́овить" (to cook): "steaming kitchen pan"
 
 PART 6: CAPTION
-Multi-line native-lang caption for social posts.
-- Line 1 opener depends on native_lang: vi+ru "Ngữ pháp tiếng Nga, Chia động từ", en+ru "Russian Grammar, Verb Conjugation".
-- Line 2: state the verb + tense in native lang, e.g. "Học chia động từ verb ở thì tưong lai.".
-- Line 3: 3-5 hashtags, e.g. "#hocTiengNga #ngugoc #chiadongtu"
+Multi-line caption STRICTLY IN THE NATIVE LANG. NEVER mix languages.
+- Line 1 opener:
+    native=en + target=ru: "Russian Grammar, Verb Conjugation"
+    native=vi + target=ru: "Ngữ pháp tiếng Nga, Chia động từ"
+- Line 2 states the verb + tense in native lang:
+    native=en example: "Learn how to conjugate <verb_target> in the future tense."
+    native=vi example: "Học chia động từ <verb_target> ở thì tương lai."
+- Line 3: 3-5 hashtags in the native lang.
+    native=en example: "#LearnRussian #RussianGrammar #VerbConjugation"
+    native=vi example: "#hocTiengNga #ngugoc #chiadongtu"
 - ZERO em-dash. Use commas, periods, colons, parentheses. Total under 260 chars.
 """
 
