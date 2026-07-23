@@ -1163,7 +1163,12 @@ async def run_once(force: bool = False) -> int:
         )
     elif layout_type == "conjugation":
         intent, content = await asyncio.to_thread(
-            generator.parse_and_generate_conjugation, request_text,
+            lambda: generator.parse_and_generate_conjugation(
+                request_text,
+                native_lang=native_lang,
+                target_lang=target_lang,
+                target_lang_name=target_lang_name,
+            )
         )
     else:
         intent, content = await asyncio.to_thread(

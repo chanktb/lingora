@@ -3421,33 +3421,33 @@ CONJUGATION_SCHEMA = {
 }
 
 
-LANGUAGE_CONJUGATION_SYSTEM_PROMPT = """You generate CONJUGATION content for a short-form vertical (9:16) language-learning video. ONE target-language verb (infinitive with stress mark) plus EXACTLY 6 personal-pronoun conjugated forms in ONE tense. Output strict JSON, no prose.
+def _build_conjugation_system_prompt(native_lang_name: str, target_lang_name: str) -> str:
+    """Build the CONJUGATION system prompt scoped to a specific native + target lang.
+
+    Every text-facing field is declared as "written in {native_lang_name}" at call
+    time. No hardcoded per-language examples: adding a new native lang (Spanish,
+    Korean, etc.) requires zero prompt edits.
+    """
+    return f"""You generate CONJUGATION content for a short-form vertical (9:16) language-learning video. ONE {target_lang_name} verb (infinitive with stress mark) plus EXACTLY 6 personal-pronoun conjugated forms in ONE tense. Output strict JSON, no prose.
+
+ABSOLUTE LANGUAGE RULE
+Every text-facing field marked "in {native_lang_name}" below MUST be written in {native_lang_name} ONLY. Do NOT mix in Vietnamese, English, or any other language when {native_lang_name} is the required output language. The ONLY exceptions are: (a) fields explicitly marked "in {target_lang_name}" (Cyrillic / target script), and (b) scene_image_prompt which is always ENGLISH for the Pexels API.
 
 PART 1: INTENT
-- target_lang: ISO 639-1 of the LEARNED language (start with "ru")
-- native_lang: ISO 639-1 the channel speaks to (e.g. "vi", "en")
-- topic: the verb itself in native lang, e.g. "nhan / to receive", "hoc / to learn"
+- target_lang: ISO 639-1 of the LEARNED language ({target_lang_name})
+- native_lang: ISO 639-1 the channel speaks to
+- topic: the verb infinitive followed by its short {native_lang_name} gloss
 - count: ALWAYS 1
 - voice_gender: "male" | "female" | "any"
-- target_lang_name: lang name in native lang ("Nga")
+- target_lang_name: "{target_lang_name}" written in {native_lang_name}
 - layout_type: ALWAYS "conjugation"
 
 PART 2: VERB (infinitive)
-- verb_target: TARGET-LANG infinitive with STRESS MARK where the language uses one. Russian: use acute accent on the stressed vowel, e.g. "получи́ть", "раб́отать", "говор́ить". SINGLE VERB, no phrase. Pick a common B1-level everyday verb.
-- verb_pronunciation: Latin transliteration friendly to a native-lang reader, hyphenated between syllables, UPPERCASE on the stressed syllable, e.g. "получи́ть" gives "pa-lu-CHIT", "раб́отать" gives "ra-BO-tat".
-- verb_native: SHORT translation of the infinitive INTO THE NATIVE LANG. Under 40 chars.
-    native=en example (verb получи́ть): "to receive, to get"
-    native=vi example (verb получи́ть): "nhận, nhận được"
-    NEVER emit Vietnamese when native_lang=="en", NEVER emit English when native_lang=="vi".
-- aspect_label: for Russian target ONLY, aspect chip STRICTLY IN THE NATIVE LANG. For non-Russian targets, use "" (empty).
-    native=en: "Perfective" (perfective verb) or "Imperfective" (imperfective verb)
-    native=vi: "hoàn thành" (perfective) or "chưa hoàn thành" (imperfective)
-- tense_label: tense of the 6 forms, STRICTLY IN THE NATIVE LANG. Under 20 chars.
-    native=en, Russian perfective verb (points to future): "Future"
-    native=en, Russian imperfective verb: "Present"
-    native=vi, Russian perfective verb: "tương lai"
-    native=vi, Russian imperfective verb: "hiện tại"
-    Both labels must match native_lang. Never mix languages inside one chip.
+- verb_target: {target_lang_name} infinitive with STRESS MARK where the language uses one. Russian: use acute accent on the stressed vowel, e.g. "получи́ть", "раб́отать", "говор́ить". SINGLE VERB, no phrase. Pick a common B1-level everyday verb.
+- verb_pronunciation: Latin transliteration friendly to a {native_lang_name} reader, hyphenated between syllables, UPPERCASE on the stressed syllable, e.g. "получи́ть" gives "pa-lu-CHIT", "раб́отать" gives "ra-BO-tat".
+- verb_native: SHORT translation of the infinitive INTO {native_lang_name}. Under 40 chars. Comma-separated synonyms OK.
+- aspect_label: for Russian target ONLY, the aspect chip written in {native_lang_name}. Use the {native_lang_name} word/phrase for "perfective" (когда verb is perfective) or "imperfective" (when verb is imperfective). For non-Russian targets, use "" (empty).
+- tense_label: tense of the 6 forms, written in {native_lang_name}. Under 20 chars. For Russian: perfective verb points to the FUTURE tense; imperfective verb stays PRESENT. Emit the equivalent {native_lang_name} tense name.
 
 PART 3: FORMS (EXACTLY 6)
 For Russian target_lang, produce these 6 pronouns in this ORDER:
@@ -3460,20 +3460,16 @@ For Russian target_lang, produce these 6 pronouns in this ORDER:
 
 Each form has:
 - pronoun: exactly the pronoun string above (Cyrillic slash included for row 3)
-- conjugated: the inflected verb WITH STRESS MARK, in TARGET-LANG script.
+- conjugated: the inflected verb WITH STRESS MARK, in {target_lang_name} script.
 - pronunciation: Latin transliteration with syllable hyphens + UPPERCASE stressed syllable, e.g. "pa-lu-CHU", "pa-LU-chish".
 
 PART 4: LABELS
-- topic_label: short label STRICTLY IN THE NATIVE LANG.
-    native=en example: "verb of the day"
-    native=vi example: "về verb"
-- short_title: 1-3 word single word STRICTLY IN THE NATIVE LANG (translation of the verb).
-    native=en example: "Receive", "Study"
-    native=vi example: "Nhận", "Học"
-- short_title_target: TARGET-LANG infinitive with stress, same as verb_target.
+- topic_label: short label written in {native_lang_name} (e.g. the {native_lang_name} equivalent of "verb of the day"). Under 24 chars.
+- short_title: 1-3 word translation of the verb, written in {native_lang_name}. Capitalize like a title.
+- short_title_target: {target_lang_name} infinitive with stress, same as verb_target.
 
 PART 5: SCENE
-- scene_image_prompt: ENGLISH description of a background SCENE fitting the verb's semantic field. Used to fetch a Pexels stock video. NO people talking to camera. Prefer GENTLE motion (steam, leaves, water, slow pan). Under 60 chars. Examples:
+- scene_image_prompt: ENGLISH description (always English, this feeds the Pexels stock-video API) of a background SCENE fitting the verb's semantic field. NO people talking to camera. Prefer GENTLE motion (steam, leaves, water, slow pan). Under 60 chars. Examples:
     "получи́ть" (to receive): "hands opening a gift box"
     "раб́отать" (to work): "hands typing on laptop"
     "говор́ить" (to speak): "coffee shop table conversation"
@@ -3481,35 +3477,46 @@ PART 5: SCENE
     "гот́овить" (to cook): "steaming kitchen pan"
 
 PART 6: CAPTION
-Multi-line caption STRICTLY IN THE NATIVE LANG. NEVER mix languages.
-- Line 1 opener:
-    native=en + target=ru: "Russian Grammar, Verb Conjugation"
-    native=vi + target=ru: "Ngữ pháp tiếng Nga, Chia động từ"
-- Line 2 states the verb + tense in native lang:
-    native=en example: "Learn how to conjugate <verb_target> in the future tense."
-    native=vi example: "Học chia động từ <verb_target> ở thì tương lai."
-- Line 3: 3-5 hashtags in the native lang.
-    native=en example: "#LearnRussian #RussianGrammar #VerbConjugation"
-    native=vi example: "#hocTiengNga #ngugoc #chiadongtu"
-- ZERO em-dash. Use commas, periods, colons, parentheses. Total under 260 chars.
+Multi-line caption written ENTIRELY in {native_lang_name}.
+- Line 1: 2-part opener naming the target language + "verb conjugation" concept, in {native_lang_name}. E.g. the {native_lang_name} equivalent of "Russian Grammar, Verb Conjugation".
+- Line 2: one sentence stating "learn how to conjugate <verb_target> in the <tense_label> tense", written in {native_lang_name}. Insert verb_target verbatim (target-script glyph is fine).
+- Line 3: 3-5 hashtags. Hashtag WORDS must be in {native_lang_name} (transliterated, no spaces, no diacritics, camelCase or lowercase). No em-dash.
+- ZERO em-dash anywhere. Use commas, periods, colons, parentheses. Total under 260 chars.
 """
 
 
 def parse_and_generate_conjugation(
     user_text,
     *,
+    native_lang: str = "vi",
+    target_lang: str = "ru",
+    native_lang_name: Optional[str] = None,
+    target_lang_name: Optional[str] = None,
     client=None,
     model=None,
 ):
-    """Generate conjugation content for a 1-verb + 6-form video."""
+    """Generate conjugation content for a 1-verb + 6-form video.
+
+    native_lang / target_lang and their human names are inlined into the
+    Gemini system prompt at call time, so the LLM never has to guess which
+    language its text-facing fields belong to. Adding a new native lang
+    (Spanish, Korean, ...) requires zero prompt changes.
+    """
     if model is None:
         model = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
+
+    if native_lang_name is None:
+        native_lang_name = LANG_NAMES.get(native_lang, native_lang)
+    if target_lang_name is None:
+        target_lang_name = LANG_NAMES.get(target_lang, target_lang)
+
+    system_prompt = _build_conjugation_system_prompt(native_lang_name, target_lang_name)
 
     resp = _call_gemini(client,
         model=model,
         contents=user_text,
         config=types.GenerateContentConfig(
-            system_instruction=LANGUAGE_CONJUGATION_SYSTEM_PROMPT,
+            system_instruction=system_prompt,
             response_mime_type="application/json",
             response_schema=CONJUGATION_SCHEMA,
             temperature=0.7,
