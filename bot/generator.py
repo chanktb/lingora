@@ -1553,7 +1553,13 @@ Build a NATURAL conversation flow. A starts (usually local/native speaker), B re
 
 For each turn:
 - speaker: "A" or "B"
-- target: full target-language sentence. NATURAL, conversational. Under 80 chars.
+- target: full sentence WRITTEN IN THE TARGET LANGUAGE'S NATIVE SCRIPT. Not a phonetic respelling, not a translation, not a romanization. NATURAL, conversational. Under 80 chars.
+    * zh: Chinese characters (Han/hanzi). Example (do not copy): "前面路口，往右拐。"  NEVER emit pinyin, VN phonetic ("Cộng hòa lù"), or English gloss here.
+    * ja: Kanji + Kana. NEVER romaji here.
+    * ko: Hangul. NEVER Revised Romanization here.
+    * ru: Cyrillic. NEVER Latin transliteration here.
+    * de/fr/es/it/pt/pl/tr/en: Latin script as native to the language (umlauts / accents where required). NEVER a phonetic respelling.
+  The phonetic guide belongs in the `pronunciation` field, NOT here. The native-language translation belongs in `native`.
 - pronunciation: phonetic per LANGUAGE STANDARD:
   * **zh**: PINYIN with tone marks, no hyphens between syllables of a word.
   * **ja**: Hepburn romaji.
@@ -1655,27 +1661,109 @@ DIALOGUE_SCHEMA = {
 }
 
 
+def _has_script_char(text: str, ranges: tuple[tuple[int, int], ...]) -> bool:
+    for ch in text:
+        cp = ord(ch)
+        for lo, hi in ranges:
+            if lo <= cp <= hi:
+                return True
+    return False
+
+
+_TARGET_SCRIPT_RANGES = {
+    "zh": (
+        (0x4E00, 0x9FFF),   # CJK Unified Ideographs
+        (0x3400, 0x4DBF),   # CJK Extension A
+        (0x20000, 0x2A6DF), # CJK Extension B
+    ),
+    "ja": (
+        (0x3040, 0x309F),   # Hiragana
+        (0x30A0, 0x30FF),   # Katakana
+        (0x4E00, 0x9FFF),   # Kanji (CJK)
+    ),
+    "ko": (
+        (0xAC00, 0xD7AF),   # Hangul syllables
+        (0x1100, 0x11FF),   # Hangul Jamo
+    ),
+    "ru": (
+        (0x0400, 0x04FF),   # Cyrillic
+        (0x0500, 0x052F),   # Cyrillic Supplement
+    ),
+    "th": (
+        (0x0E00, 0x0E7F),   # Thai
+    ),
+}
+
+
+def _dialogue_turns_wrong_script(turns_raw: list, target_lang: str) -> list[int]:
+    """Return indices of turns whose `target` lacks any target-script character.
+
+    Only enforces languages with distinct scripts (zh/ja/ko/ru/th). Latin-script
+    targets (de/fr/es/en/...) are not checked here because Gemini rarely mis-scripts
+    them and heuristic checks would false-positive on loan words.
+    """
+    ranges = _TARGET_SCRIPT_RANGES.get(target_lang)
+    if not ranges:
+        return []
+    bad = []
+    for i, t in enumerate(turns_raw):
+        text = (t.get("target") or "").strip()
+        if not text or not _has_script_char(text, ranges):
+            bad.append(i)
+    return bad
+
+
 def parse_and_generate_dialogue(
     user_text: str,
     *,
     client: Optional[genai.Client] = None,
     model: Optional[str] = None,
 ) -> tuple[ParsedIntent, DialogueContent]:
-    """Generate a 2-character mini-dialogue video content from scenario request."""
+    """Generate a 2-character mini-dialogue video content from scenario request.
+
+    Retries once if any turn's `target` field slips out of the target-lang
+    native script (gemini-flash-lite-latest occasionally emits VN phonetic
+    respelling instead of Chinese hanzi, etc.).
+    """
     if model is None:
         model = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")
 
-    resp = _call_gemini(client,
-        model=model,
-        contents=user_text,
-        config=types.GenerateContentConfig(
-            system_instruction=LANGUAGE_DIALOGUE_SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_schema=DIALOGUE_SCHEMA,
-            temperature=0.85,
-        ),
-    )
-    data = json.loads(resp.text)
+    def _one_call(extra_hint: str = "") -> dict:
+        resp = _call_gemini(client,
+            model=model,
+            contents=user_text + extra_hint,
+            config=types.GenerateContentConfig(
+                system_instruction=LANGUAGE_DIALOGUE_SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=DIALOGUE_SCHEMA,
+                temperature=0.85,
+            ),
+        )
+        return json.loads(resp.text)
+
+    data = _one_call()
+    turns_raw = data.get("turns") or []
+    target_lang_lc = (data.get("intent", {}).get("target_lang") or "").lower()
+    bad = _dialogue_turns_wrong_script(turns_raw, target_lang_lc)
+    if bad:
+        log.warning(
+            "dialogue: %d/%d turns have `target` outside %s native script; retrying once. Bad targets: %r",
+            len(bad), len(turns_raw), target_lang_lc,
+            [turns_raw[i].get("target", "") for i in bad[:3]],
+        )
+        hint = (
+            f"\n\nHARD REQUIREMENT: every turn's `target` MUST be written in the "
+            f"native script of {target_lang_lc}. Do NOT emit phonetic respelling, "
+            f"romanization, or a translation in the `target` field. Only the "
+            f"`pronunciation` field carries the phonetic guide."
+        )
+        data = _one_call(hint)
+        turns_raw = data.get("turns") or []
+        bad = _dialogue_turns_wrong_script(turns_raw, target_lang_lc)
+        if bad:
+            raise ValueError(
+                f"dialogue: {len(bad)} turns still off-script after retry for target_lang={target_lang_lc}"
+            )
 
     intent_data = data["intent"]
     intent = ParsedIntent(
